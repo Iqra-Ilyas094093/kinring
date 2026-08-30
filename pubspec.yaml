@@ -35,6 +35,14 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # MVVM state management
+  provider: ^6.1.2
+
+  # Sora (headings) + Poppins (body) without bundling font files
+  google_fonts: ^6.2.1
+  firebase_core: ^4.14.0
+  firebase_auth: ^6.6.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -45,6 +53,29 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # Generates native launcher icons (Android + iOS) from source PNGs below.
+  # Run: flutter pub run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.3
+
+# Config for flutter_launcher_icons. image_path is the legacy/fallback icon
+# (used as-is on iOS and older Android). adaptive_icon_foreground is a
+# separately padded version of the same mark — Android adaptive icons apply
+# a circular/rounded/square mask per-device, so the foreground content must
+# sit within the center ~66% of the canvas or it gets clipped; the plain
+# app_icon.png bleeds almost to the edge, so a padded copy
+# (app_icon_foreground.png) was generated for this purpose specifically.
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/logo/app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/logo/app_icon_foreground.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+
+  # Generates app_icon.png into every required Android/iOS launcher size
+  flutter_launcher_icons: ^0.14.3
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

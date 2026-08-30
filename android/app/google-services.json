@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "614410360657",
+    "project_id": "kinring-30eb7",
+    "storage_bucket": "kinring-30eb7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614410360657:android:61cfabf53e317288a9a570",
+        "android_client_info": {
+          "package_name": "com.example.kinring"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDB3PClf9dNxFIgKdCzmJHh5Y5RwYIOm5M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
