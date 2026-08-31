@@ -10,7 +10,7 @@ class AppAssets {
   static const String appIcon = 'assets/logo/app_icon.png';
   static const String appIconForeground = 'assets/logo/app_icon_foreground.png';
 
-  /// Not bundled yet — drop a Google "G" mark PNG/SVG here when available.
-  /// GoogleSignInButton falls back to a text "G" until this asset exists.
   static const String googleLogo = 'assets/icons/google_logo.png';
+
+  static const String welcomeBackground = 'assets/images/welcome_screen_background_image.png';
 }

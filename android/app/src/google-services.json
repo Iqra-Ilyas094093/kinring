@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "614410360657",
+    "project_id": "kinring-30eb7",
+    "storage_bucket": "kinring-30eb7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614410360657:android:61cfabf53e317288a9a570",
+        "android_client_info": {
+          "package_name": "com.example.kinring"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "614410360657-d4tp08eqcelvkqtvv0nulgbskn2qio0p.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.kinring",
+            "certificate_hash": "982db5771f6136a12e96bd7fbdceaf18233c9fbd"
+          }
+        },
+        {
+          "client_id": "614410360657-tqnk58alj2rbk6e71s8qcrvuj7aed6a5.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDB3PClf9dNxFIgKdCzmJHh5Y5RwYIOm5M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "614410360657-tqnk58alj2rbk6e71s8qcrvuj7aed6a5.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "614410360657-plcoidopehn99u28cmhpel16su5us6h8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.kinring"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

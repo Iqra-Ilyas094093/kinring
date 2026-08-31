@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../core/constants/app_assets.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/buttons/secondary_button.dart';
-import '../../widgets/common/app_logo.dart';
 import '../auth/login_screen.dart';
 import '../auth/signup_screen.dart';
 
@@ -22,44 +22,53 @@ class WelcomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.start,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-
-              const Spacer(),
-              Text(
-                'One ring, everyone in',
-                style: textTheme.displayMedium,
-                textAlign: TextAlign.start,
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Set alarms and reminders your whole group shares.',
-                style: textTheme.bodyMedium,
-                textAlign: TextAlign.start,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              PrimaryButton(
-                label: 'Log In',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              SecondaryButton(
-                label: 'Sign Up',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SignupScreen()),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Image.asset(
+              AppAssets.welcomeBackground,
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Spacer(),
+                  Text(
+                    'One ring, everyone in',
+                    style: textTheme.displayMedium,
+                    textAlign: TextAlign.start,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Set alarms and reminders your whole group shares.',
+                    style: textTheme.bodyMedium,
+                    textAlign: TextAlign.start,
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  PrimaryButton(
+                    label: 'Log In',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  SecondaryButton(
+                    label: 'Sign Up',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SignupScreen()),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
