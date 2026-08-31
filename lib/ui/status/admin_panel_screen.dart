@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/services/event_trigger.dart';
 import '../../models/event_draft.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/list_row.dart';
 import '../../widgets/common/section_header.dart';
 import '../groups/group_settings_screen.dart';
+import '../events/edit_event_screen.dart';
 import 'event_history_screen.dart';
-import 'live_group_status_screen.dart';
 
 /// Admin Panel Screen (product doc 5.9.2). The prominent "Ring Now"
 /// broadcast, a quick-edit list of past/upcoming events, and a shortcut
@@ -39,13 +40,11 @@ class AdminPanelScreen extends StatelessWidget {
     );
     if (confirmed && context.mounted) {
       // TODO: POST to the Cloudflare Worker "Ring Now" endpoint (doc
-      // Part 4) — push-only broadcast, bypasses silent mode.
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => LiveGroupStatusScreen(
-            draft: EventDraft(groupName: groupName, title: 'Ring Now Broadcast'),
-          ),
-        ),
+      // Part 4) — push-only broadcast, bypasses silent mode. This local
+      // fire is what that push ultimately triggers on each device.
+      EventTrigger.fire(
+        context,
+        EventDraft(groupName: groupName, title: 'Ring Now Broadcast', kind: EventKind.alarm),
       );
     }
   }
@@ -99,9 +98,17 @@ class AdminPanelScreen extends StatelessWidget {
                 groupName: groupName,
                 timeLabel: event.time,
                 kind: event.kind,
-                onTap: () {
-                  // TODO: push Edit Event Screen (5.7.6) for quick-edit.
-                },
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => EditEventScreen(
+                      draft: EventDraft(
+                        groupName: groupName,
+                        title: event.title,
+                        kind: event.kind,
+                      ),
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: AppSpacing.sm),
             ],

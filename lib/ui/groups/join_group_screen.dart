@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/app_avatar.dart';
+import '../../widgets/feedback/app_toast.dart';
 import '../../widgets/inputs/app_text_field.dart';
 import 'group_details_screen.dart';
 
@@ -58,6 +59,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
                 onPressed: () {
                   // TODO: open device camera for QR scan (mobile_scanner
                   // or similar package not yet in pubspec.yaml).
+                  AppToast.show(context, 'QR scanning coming soon');
                 },
                 icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
                 label: const Text('Scan QR Code'),

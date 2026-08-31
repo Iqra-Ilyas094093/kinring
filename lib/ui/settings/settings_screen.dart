@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/list_row.dart';
@@ -13,8 +15,8 @@ import 'notification_settings_screen.dart';
 /// Settings tab (product doc 5.5.3 + 5.10). Entry point into the four
 /// sub-screens; owns nothing but navigation + logout.
 ///
-/// TODO: wire profile photo/name/email + logout to a UserViewModel once
-/// one exists (mirrors AuthViewModel pattern used in the auth flow).
+/// TODO: wire profile photo/name/email to a UserViewModel once one
+/// exists (mirrors AuthViewModel pattern used in the auth flow).
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -29,9 +31,11 @@ class SettingsScreen extends StatelessWidget {
       confirmLabel: 'Log Out',
       isDestructive: true,
     );
-    if (confirmed) {
-      // TODO: call AuthViewModel.signOut() — AuthGate will route to
-      // Welcome Screen automatically once the session clears.
+    if (confirmed && context.mounted) {
+      // AuthGate listens to the Firebase session stream and routes back
+      // to Welcome Screen automatically once this clears — no manual
+      // navigation needed here.
+      await context.read<AuthViewModel>().signOut();
     }
   }
 

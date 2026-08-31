@@ -7,6 +7,7 @@ import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/list_row.dart';
 import '../../widgets/inputs/app_text_field.dart';
+import 'manage_members_screen.dart';
 
 /// Group Settings screen (product doc 5.6.5). Editable group name/photo,
 /// Manage Members, Leave Group, and admin-only Delete Group.
@@ -80,9 +81,11 @@ class _GroupSettingsScreenState extends State<GroupSettingsScreen> {
               label: 'Manage Members',
               leading: const Icon(Icons.people_outline, color: AppColors.dark1),
               onTap: () {
-                // TODO: push a Manage Members screen (remove/promote —
-                // not separately specced in Part 5, folds into Group
-                // Details' member list for now).
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ManageMembersScreen(groupName: widget.groupName),
+                  ),
+                );
               },
             ),
             const SizedBox(height: AppSpacing.md),

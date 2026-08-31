@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/services/event_trigger.dart';
 import '../../models/event_draft.dart';
 import '../../widgets/buttons/primary_button.dart';
+import '../../widgets/buttons/secondary_button.dart';
 import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/event_card.dart';
@@ -110,6 +112,14 @@ class UpcomingEventDetailScreen extends StatelessWidget {
                 onPressed: () => _cancelEvent(context),
               ),
             ],
+            const SizedBox(height: AppSpacing.sm),
+            // TODO(backend wiring): remove once AlarmManager/FCM actually
+            // fire EventTrigger.fire — this button exists purely so the
+            // Ringing/Task UI is reachable and testable before that lands.
+            SecondaryButton(
+              label: 'Preview: Trigger This Event',
+              onPressed: () => EventTrigger.fire(context, draft),
+            ),
           ],
         ),
       ),

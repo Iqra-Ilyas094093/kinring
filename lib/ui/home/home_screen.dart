@@ -9,6 +9,8 @@ import '../../widgets/common/group_card.dart';
 import '../../widgets/common/section_header.dart';
 import '../events/create_event_screen.dart';
 import '../events/upcoming_event_detail_screen.dart';
+import '../groups/group_details_screen.dart';
+import 'notifications_screen.dart';
 
 /// Home tab (product doc 5.5.1). Greeting + notification bell, "Upcoming"
 /// events across all groups, "Your Groups" horizontal scroll, empty state
@@ -54,9 +56,9 @@ class HomeScreen extends StatelessWidget {
                 Text('Hi, $_demoName', style: textTheme.headlineLarge),
                 IconButton(
                   icon: const Icon(Icons.notifications_outlined, color: AppColors.dark1),
-                  onPressed: () {
-                    // TODO: open notifications list once it exists.
-                  },
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                  ),
                 ),
               ],
             ),
@@ -113,9 +115,11 @@ class HomeScreen extends StatelessWidget {
                     groupName: group.name,
                     memberNames: group.members,
                     nextEventLabel: group.next,
-                    onTap: () {
-                      // TODO: push Group Details Screen (5.6.3).
-                    },
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => GroupDetailsScreen(groupName: group.name),
+                      ),
+                    ),
                   );
                 },
               ),

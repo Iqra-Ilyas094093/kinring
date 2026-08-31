@@ -4,6 +4,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/common/group_card.dart';
+import '../../widgets/inputs/app_text_field.dart';
 import 'create_group_screen.dart';
 import 'group_details_screen.dart';
 import 'join_group_screen.dart';
@@ -12,14 +13,35 @@ import 'join_group_screen.dart';
 /// empty state with Create/Join actions.
 ///
 /// TODO: replace demo data with a GroupsViewModel backed by Firestore.
-class GroupsScreen extends StatelessWidget {
+class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
+  @override
+  State<GroupsScreen> createState() => _GroupsScreenState();
+}
+
+class _GroupsScreenState extends State<GroupsScreen> {
   static const _demoGroups = [
     (name: 'Exam Squad', members: ['Alex', 'Sam', 'Priya', 'Jon'], next: 'Alarm · 6:00 AM'),
     (name: 'Design Team', members: ['Alex', 'Mira'], next: 'Reminder · 9:00 AM'),
     (name: 'Gym Crew', members: ['Alex', 'Dev', 'Lee'], next: null),
   ];
+
+  bool _searching = false;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _searching = !_searching;
+      if (!_searching) _searchController.clear();
+    });
+  }
 
   void _openCreate(BuildContext context) => Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const CreateGroupScreen()),
@@ -32,6 +54,10 @@ class GroupsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final query = _searchController.text.trim().toLowerCase();
+    final visibleGroups = query.isEmpty
+        ? _demoGroups
+        : _demoGroups.where((g) => g.name.toLowerCase().contains(query)).toList();
     final hasGroups = _demoGroups.isNotEmpty;
 
     return Scaffold(
@@ -53,10 +79,11 @@ class GroupsScreen extends StatelessWidget {
                   Row(
                     children: [
                       IconButton(
-                        icon: const Icon(Icons.search, color: AppColors.dark1),
-                        onPressed: () {
-                          // TODO: group search once GroupsViewModel exists.
-                        },
+                        icon: Icon(
+                          _searching ? Icons.close : Icons.search,
+                          color: AppColors.dark1,
+                        ),
+                        onPressed: _toggleSearch,
                       ),
                       IconButton(
                         icon: const Icon(Icons.add, color: AppColors.dark1),
@@ -67,26 +94,49 @@ class GroupsScreen extends StatelessWidget {
                 ],
               ),
             ),
+            if (_searching)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                  AppSpacing.lg,
+                  0,
+                ),
+                child: AppTextField(
+                  label: 'Search groups',
+                  controller: _searchController,
+                  hintText: 'e.g. Exam Squad',
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
             Expanded(
               child: hasGroups
-                  ? ListView.separated(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      itemCount: _demoGroups.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-                      itemBuilder: (context, i) {
-                        final group = _demoGroups[i];
-                        return GroupCard(
-                          groupName: group.name,
-                          memberNames: group.members,
-                          nextEventLabel: group.next,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => GroupDetailsScreen(groupName: group.name),
-                            ),
+                  ? (visibleGroups.isEmpty
+                      ? Center(
+                          child: EmptyState(
+                            icon: Icons.search_off_rounded,
+                            title: 'No groups match "$query"',
+                            subtitle: 'Try a different name.',
                           ),
-                        );
-                      },
-                    )
+                        )
+                      : ListView.separated(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          itemCount: visibleGroups.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                          itemBuilder: (context, i) {
+                            final group = visibleGroups[i];
+                            return GroupCard(
+                              groupName: group.name,
+                              memberNames: group.members,
+                              nextEventLabel: group.next,
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => GroupDetailsScreen(groupName: group.name),
+                                ),
+                              ),
+                            );
+                          },
+                        ))
                   : Center(
                       child: EmptyState(
                         icon: Icons.groups_outlined,
