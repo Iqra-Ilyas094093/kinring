@@ -16,12 +16,10 @@ import '../../widgets/feedback/app_toast.dart';
 class InviteMembersScreen extends StatelessWidget {
   const InviteMembersScreen({
     super.key,
-    required this.groupId,
     required this.groupName,
     required this.inviteCode,
   });
 
-  final String groupId;
   final String groupName;
   final String inviteCode;
 

@@ -6,198 +6,201 @@ import 'package:flutter/foundation.dart';
 
 import '../models/group_model.dart';
 
-/// Group backend (product doc Part 5.6 / roadmap Phase 2).
-///
-/// Same pattern as [AuthViewModel]: screens never talk to `Firestore`
-/// directly, everything goes through here. Reads are exposed as
-/// `Stream`s (`.snapshots()`) so every screen updates live — no manual
-/// refresh, no pull-to-refresh needed anywhere in the Group flow.
+/// Single source of truth for group data — mirrors how [AuthViewModel]
+/// owns auth. Provided once at the app root; screens never talk to
+/// `FirebaseFirestore` directly for group data.
 class GroupsViewModel extends ChangeNotifier {
-  GroupsViewModel({
-    FirebaseFirestore? firestore,
-    FirebaseAuth? firebaseAuth,
-  })  : _db = firestore ?? FirebaseFirestore.instance,
-        _auth = firebaseAuth ?? FirebaseAuth.instance;
+  GroupsViewModel({FirebaseFirestore? firestore, FirebaseAuth? auth})
+      : _db = firestore ?? FirebaseFirestore.instance,
+        _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
 
   String get _uid {
     final uid = _auth.currentUser?.uid;
-    if (uid == null) throw StateError('GroupsViewModel used while signed out.');
+    if (uid == null) throw StateError('GroupsViewModel used with no signed-in user.');
     return uid;
   }
 
-  CollectionReference<Map<String, dynamic>> get _groups => _db.collection('groups');
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
 
-  DocumentReference<Map<String, dynamic>> _groupDoc(String groupId) => _groups.doc(groupId);
-
-  CollectionReference<Map<String, dynamic>> _membersCol(String groupId) =>
-      _groupDoc(groupId).collection('members');
-
-  // ---- reads (live) ----------------------------------------------------
-
-  /// Groups the current user belongs to — powers the Groups tab / Home
-  /// "Your Groups" section. Live: updates the moment a member doc is
-  /// added/removed anywhere, no refresh needed.
-  Stream<List<Group>> listenGroups() {
-    return _groups
+  /// Live stream of every group the current user belongs to. Screens
+  /// (`GroupsScreen`, `HomeScreen`) build directly off this with a
+  /// `StreamBuilder` — no manual refresh needed.
+  Stream<List<GroupModel>> listenGroups() {
+    return _db
+        .collection('groups')
         .where('memberIds', arrayContains: _uid)
         .snapshots()
-        .map((snap) => snap.docs.map(Group.fromDoc).toList());
+        .map((qs) => qs.docs.map(GroupModel.fromDoc).toList());
   }
 
-  /// A single group doc, live — for Group Details / Group Settings
-  /// headers (name, photo) that can change while the screen is open.
-  Stream<Group?> watchGroup(String groupId) {
-    return _groupDoc(groupId).snapshots().map((doc) => doc.exists ? Group.fromDoc(doc) : null);
+  Stream<List<GroupMemberModel>> listenMembers(String groupId) {
+    return _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('members')
+        .snapshots()
+        .map((qs) => qs.docs.map(GroupMemberModel.fromDoc).toList());
   }
 
-  /// Member list, live — Group Details, Manage Members, Live Status all
-  /// key off this same stream so an admin promotion or a member leaving
-  /// shows up everywhere instantly.
-  Stream<List<GroupMember>> listenMembers(String groupId) {
-    return _membersCol(groupId).snapshots().map((snap) => snap.docs.map(GroupMember.fromDoc).toList());
+  Stream<GroupModel?> listenGroup(String groupId) {
+    return _db
+        .collection('groups')
+        .doc(groupId)
+        .snapshots()
+        .map((doc) => doc.exists ? GroupModel.fromDoc(doc) : null);
   }
 
-  /// Current user's role in a group — drives `isAdmin` checks in the UI
-  /// (Admin Panel entry, Delete Group row, promote/remove menu).
-  Stream<GroupRole?> watchMyRole(String groupId) {
-    return _membersCol(groupId).doc(_uid).snapshots().map((doc) {
-      if (!doc.exists) return null;
-      return GroupMember.fromDoc(doc).role;
-    });
+  String _generateInviteCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I ambiguity
+    final rand = Random.secure();
+    final suffix = List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
+    return 'KR-$suffix';
   }
 
-  /// Member list joined with `users/{uid}` profiles (name/photo), for
-  /// screens that render names, not just uids — Group Details, Manage
-  /// Members.
-  ///
-  /// Live on the *member* subcollection (add/remove/promote shows up
-  /// instantly); the `users/{uid}` profile lookups inside are one-shot
-  /// `.get()`s re-run each time the member list changes. Good enough for
-  /// MVP group sizes — a member editing their own name won't re-push
-  /// this stream until something else about the group changes. Revisit
-  /// with a denormalized name-on-member-doc if that's ever an issue.
-  Stream<List<GroupMemberProfile>> listenMembersWithProfiles(String groupId) {
-    return _membersCol(groupId).snapshots().asyncMap((snap) async {
-      final members = snap.docs.map(GroupMember.fromDoc).toList();
-      final profiles = await Future.wait(members.map((m) async {
-        final userDoc = await _db.collection('users').doc(m.uid).get();
-        final d = userDoc.data();
-        return GroupMemberProfile(
-          member: m,
-          name: d?['name'] as String?,
-          photoUrl: d?['photoUrl'] as String?,
-        );
-      }));
-      return profiles;
-    });
+  Future<void> _ensureOwnUserDoc() async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+    await _db.collection('users').doc(user.uid).set({
+      'name': user.displayName ?? 'Member',
+      'email': user.email,
+      'photoUrl': user.photoURL,
+    }, SetOptions(merge: true));
   }
 
-  /// One-off lookup by invite code — Join Group screen's live preview
-  /// before the user commits to joining. Not a stream: this only needs
-  /// to run once per code entered, not stay subscribed.
-  Future<Group?> previewGroupByCode(String code) async {
-    final normalized = code.trim().toUpperCase();
-    if (normalized.isEmpty) return null;
-    final snap = await _groups.where('inviteCode', isEqualTo: normalized).limit(1).get();
-    if (snap.docs.isEmpty) return null;
-    return Group.fromDoc(snap.docs.first);
-  }
+  Future<GroupModel?> createGroup(String name, {String? photoUrl}) async {
+    try {
+      await _ensureOwnUserDoc();
+      final uid = _uid;
+      final user = _auth.currentUser;
+      final code = _generateInviteCode();
+      final groupRef = _db.collection('groups').doc();
 
-  // ---- writes ------------------------------------------------------------
-
-  /// Creates a group doc + the creator's own member doc (role: admin) in
-  /// one atomic batch, so a group is never briefly "adminless" if the
-  /// second write failed.
-  Future<Group> createGroup(String name) async {
-    final uid = _uid;
-    final groupRef = _groups.doc();
-    final code = _generateInviteCode();
-
-    final group = Group(
-      id: groupRef.id,
-      name: name.trim(),
-      createdBy: uid,
-      inviteCode: code,
-      memberIds: [uid],
-    );
-
-    final batch = _db.batch();
-    batch.set(groupRef, group.toMap());
-    batch.set(
-      groupRef.collection('members').doc(uid),
-      GroupMember(uid: uid, role: GroupRole.admin, joinedAt: DateTime.now()).toMap(),
-    );
-    await batch.commit();
-
-    return group;
-  }
-
-  /// Looks up a group by invite code, then adds the current user as a
-  /// member (subdoc + `memberIds` array) in one batch.
-  Future<Group> joinGroup(String code) async {
-    final uid = _uid;
-    final group = await previewGroupByCode(code);
-    if (group == null) {
-      throw StateError('No group found for that invite code.');
+      final batch = _db.batch();
+      final group = GroupModel(
+        id: groupRef.id,
+        name: name.trim(),
+        photoUrl: photoUrl,
+        inviteCode: code,
+        createdBy: uid,
+        memberIds: [uid],
+      );
+      batch.set(groupRef, group.toCreateMap());
+      batch.set(
+        groupRef.collection('members').doc(uid),
+        GroupMemberModel(
+          uid: uid,
+          role: 'admin',
+          active: true,
+          displayName: user?.displayName ?? 'Member',
+          photoUrl: user?.photoURL,
+        ).toMap(),
+      );
+      await batch.commit();
+      return group;
+    } catch (e) {
+      _errorMessage = 'Could not create group. Please try again.';
+      notifyListeners();
+      return null;
     }
+  }
 
-    final groupRef = _groupDoc(group.id);
+  /// Looks a group up by invite code without joining — used for the
+  /// Join Group screen's live "group found" preview.
+  Future<GroupModel?> lookupByCode(String code) async {
+    final trimmed = code.trim().toUpperCase();
+    if (trimmed.isEmpty) return null;
+    final qs = await _db
+        .collection('groups')
+        .where('inviteCode', isEqualTo: trimmed)
+        .limit(1)
+        .get();
+    if (qs.docs.isEmpty) return null;
+    return GroupModel.fromDoc(qs.docs.first);
+  }
+
+  Future<GroupModel?> joinGroup(String code) async {
+    try {
+      await _ensureOwnUserDoc();
+      final group = await lookupByCode(code);
+      if (group == null) {
+        _errorMessage = 'No group found with that invite code.';
+        notifyListeners();
+        return null;
+      }
+      final uid = _uid;
+      final user = _auth.currentUser;
+      final groupRef = _db.collection('groups').doc(group.id);
+      final batch = _db.batch();
+      batch.set(
+        groupRef.collection('members').doc(uid),
+        GroupMemberModel(
+          uid: uid,
+          role: 'member',
+          active: true,
+          displayName: user?.displayName ?? 'Member',
+          photoUrl: user?.photoURL,
+        ).toMap(),
+      );
+      batch.update(groupRef, {
+        'memberIds': FieldValue.arrayUnion([uid]),
+      });
+      await batch.commit();
+      return group;
+    } catch (e) {
+      _errorMessage = 'Could not join group. Please try again.';
+      notifyListeners();
+      return null;
+    }
+  }
+
+  Future<void> renameGroup(String groupId, String newName) async {
+    await _db.collection('groups').doc(groupId).update({'name': newName.trim()});
+  }
+
+  Future<void> promoteMember(String groupId, String memberUid) async {
+    await _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('members')
+        .doc(memberUid)
+        .update({'role': 'admin'});
+  }
+
+  Future<void> removeMember(String groupId, String memberUid) async {
+    final groupRef = _db.collection('groups').doc(groupId);
     final batch = _db.batch();
-    batch.set(
-      groupRef.collection('members').doc(uid),
-      GroupMember(uid: uid, role: GroupRole.member, joinedAt: DateTime.now()).toMap(),
-    );
+    batch.delete(groupRef.collection('members').doc(memberUid));
     batch.update(groupRef, {
-      'memberIds': FieldValue.arrayUnion([uid]),
+      'memberIds': FieldValue.arrayRemove([memberUid]),
     });
     await batch.commit();
-
-    return group;
   }
 
-  Future<void> renameGroup(String groupId, String name) async {
-    await _groupDoc(groupId).update({'name': name.trim()});
+  Future<void> leaveGroup(String groupId) async {
+    await removeMember(groupId, _uid);
   }
-
-  Future<void> promoteMember(String groupId, String uid) async {
-    await _membersCol(groupId).doc(uid).update({'role': 'admin'});
-  }
-
-  Future<void> removeMember(String groupId, String uid) async {
-    final groupRef = _groupDoc(groupId);
-    final batch = _db.batch();
-    batch.delete(groupRef.collection('members').doc(uid));
-    batch.update(groupRef, {
-      'memberIds': FieldValue.arrayRemove([uid]),
-    });
-    await batch.commit();
-  }
-
-  /// Current user leaving — same write as [removeMember] but always
-  /// targets the caller's own uid (rules only allow self-delete or admin).
-  Future<void> leaveGroup(String groupId) => removeMember(groupId, _uid);
 
   Future<void> deleteGroup(String groupId) async {
-    final groupRef = _groupDoc(groupId);
+    final groupRef = _db.collection('groups').doc(groupId);
     final members = await groupRef.collection('members').get();
     final batch = _db.batch();
-    for (final doc in members.docs) {
-      batch.delete(doc.reference);
+    for (final m in members.docs) {
+      batch.delete(m.reference);
     }
     batch.delete(groupRef);
     await batch.commit();
-    // Note: this does not cascade-delete groups/{id}/events (Phase 3+) —
-    // once Event backend exists, delete that subcollection here too.
+    // Note: events/statuses subcollections under this group are orphaned
+    // by a client-side delete (Firestore doesn't cascade-delete
+    // subcollections). Cleaning those up is a Cloudflare Worker job for
+    // later phases, not part of Phase 1-3 scope.
   }
 
-  static const _codeChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
-
-  String _generateInviteCode() {
-    final rand = Random.secure();
-    final body = List.generate(5, (_) => _codeChars[rand.nextInt(_codeChars.length)]).join();
-    return 'KR-$body';
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
   }
 }

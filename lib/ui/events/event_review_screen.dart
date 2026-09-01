@@ -1,27 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
-import '../../viewmodels/events_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/feedback/app_toast.dart';
 
 /// Event Summary/Review screen (product doc 5.7.4). Read-only summary of
 /// everything set in the previous steps, then Confirm & Create.
-class EventReviewScreen extends StatefulWidget {
+class EventReviewScreen extends StatelessWidget {
   const EventReviewScreen({super.key, required this.draft});
 
   final EventDraft draft;
-
-  @override
-  State<EventReviewScreen> createState() => _EventReviewScreenState();
-}
-
-class _EventReviewScreenState extends State<EventReviewScreen> {
-  bool _creating = false;
 
   Widget _row(BuildContext context, String label, String value) {
     final textTheme = Theme.of(context).textTheme;
@@ -37,27 +28,9 @@ class _EventReviewScreenState extends State<EventReviewScreen> {
     );
   }
 
-  Future<void> _confirmCreate() async {
-    setState(() => _creating = true);
-    try {
-      // Writing this doc is what the local AlarmManager schedule (Phase 4)
-      // and the Cloudflare Worker cron sync (Phase 6) will key off of —
-      // this screen only owns the Firestore write.
-      await context.read<EventsViewModel>().createEvent(widget.draft);
-      if (!mounted) return;
-      AppToast.show(context, 'Event created', type: AppToastType.success);
-      Navigator.of(context).popUntil((route) => route.isFirst);
-    } catch (_) {
-      if (!mounted) return;
-      AppToast.show(context, "Couldn't create event. Try again.", type: AppToastType.error);
-      setState(() => _creating = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final draft = widget.draft;
     final title = draft.title.trim().isEmpty
         ? (draft.kind == EventKind.alarm ? 'Alarm' : 'Reminder')
         : draft.title.trim();
@@ -107,8 +80,13 @@ class _EventReviewScreenState extends State<EventReviewScreen> {
               const Spacer(),
               PrimaryButton(
                 label: 'Confirm & Create',
-                isLoading: _creating,
-                onPressed: !_creating ? _confirmCreate : null,
+                onPressed: () {
+                  // TODO: call EventsViewModel.createEvent(draft) — this
+                  // is where the local exact alarm (AlarmManager) and the
+                  // Cloudflare Worker sync get scheduled per doc Part 3.
+                  AppToast.show(context, 'Event created', type: AppToastType.success);
+                  Navigator.of(context).popUntil((route) => route.isFirst);
+                },
               ),
             ],
           ),

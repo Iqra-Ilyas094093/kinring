@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/services/event_trigger.dart';
 import '../../models/event_draft.dart';
-import '../../viewmodels/events_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/buttons/secondary_button.dart';
 import '../../widgets/common/app_avatar.dart';
@@ -18,12 +16,9 @@ import 'edit_event_screen.dart';
 /// per-member status list, and a Cancel Event action for the admin/
 /// creator.
 ///
-/// Cancel Event is wired to [EventsViewModel.cancelEvent] (Phase 3).
-///
-/// TODO(Phase 8): `_isCreatorOrAdmin` and `_demoParticipants` should
-/// come from an EventsViewModel/GroupsViewModel lookup and the
-/// `statuses` subcollection — participant statuses go live once the
-/// Task Clear flow (Phase 8) writes them.
+/// TODO: `_isCreatorOrAdmin` and `_demoParticipants` should come from an
+/// EventsViewModel; participant statuses should update live (5.9.1
+/// mirrors this same status data on the Live Group Status Screen).
 class UpcomingEventDetailScreen extends StatelessWidget {
   const UpcomingEventDetailScreen({super.key, required this.draft});
 
@@ -45,9 +40,8 @@ class UpcomingEventDetailScreen extends StatelessWidget {
       confirmLabel: 'Delete',
       isDestructive: true,
     );
-    if (confirmed && draft.isPersisted) {
-      await context.read<EventsViewModel>().cancelEvent(draft.groupId!, draft.id!);
-      if (!context.mounted) return;
+    if (confirmed) {
+      // TODO: call EventsViewModel.cancelEvent(...).
       Navigator.of(context).pop();
     }
   }

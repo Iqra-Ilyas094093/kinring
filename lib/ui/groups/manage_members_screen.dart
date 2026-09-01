@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../models/group_model.dart';
-import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/feedback/app_toast.dart';
@@ -14,13 +11,12 @@ import '../../widgets/feedback/app_toast.dart';
 /// remove them from the group (doc's "Confirm Remove Member" dialog,
 /// Part 7 #3).
 ///
-/// Member list + own role are both live via [GroupsViewModel] — a
-/// promotion/removal from any device updates every open copy of this
-/// screen without a refresh.
+/// TODO: replace `_members` demo list with a GroupsViewModel query;
+/// promote/remove should call GroupsViewModel.setAdmin(...) /
+/// removeMember(...) instead of only updating local state.
 class ManageMembersScreen extends StatefulWidget {
-  const ManageMembersScreen({super.key, required this.groupId, required this.groupName});
+  const ManageMembersScreen({super.key, required this.groupName});
 
-  final String groupId;
   final String groupName;
 
   @override
@@ -28,96 +24,86 @@ class ManageMembersScreen extends StatefulWidget {
 }
 
 class _ManageMembersScreenState extends State<ManageMembersScreen> {
-  Future<void> _promote(GroupMemberProfile profile) async {
-    await context.read<GroupsViewModel>().promoteMember(widget.groupId, profile.member.uid);
-    if (!mounted) return;
-    AppToast.show(context, '${profile.displayName} is now an admin', type: AppToastType.success);
+  static const _isAdmin = true; // TODO: from GroupsViewModel / current user.
+
+  final List<({String name, bool isAdmin})> _members = [
+    (name: 'Alex Rivera', isAdmin: true),
+    (name: 'Sam Chen', isAdmin: false),
+    (name: 'Priya Nair', isAdmin: false),
+    (name: 'Jon Kim', isAdmin: false),
+  ];
+
+  void _promote(int index) {
+    final member = _members[index];
+    setState(() => _members[index] = (name: member.name, isAdmin: true));
+    // TODO: call GroupsViewModel.setAdmin(member.name, true).
+    AppToast.show(context, '${member.name} is now an admin', type: AppToastType.success);
   }
 
-  Future<void> _remove(GroupMemberProfile profile) async {
+  Future<void> _remove(int index) async {
+    final member = _members[index];
     final confirmed = await ConfirmationDialog.show(
       context,
       title: 'Remove Member',
-      message: 'Remove ${profile.displayName} from group?',
+      message: 'Remove ${member.name} from group?',
       confirmLabel: 'Remove',
       isDestructive: true,
     );
     if (confirmed && mounted) {
-      await context.read<GroupsViewModel>().removeMember(widget.groupId, profile.member.uid);
-      if (!mounted) return;
-      AppToast.show(context, '${profile.displayName} removed');
+      setState(() => _members.removeAt(index));
+      // TODO: call GroupsViewModel.removeMember(member.name).
+      AppToast.show(context, '${member.name} removed');
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final vm = context.read<GroupsViewModel>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: Text('Manage Members — ${widget.groupName}')),
       body: SafeArea(
-        child: StreamBuilder<GroupRole?>(
-          stream: vm.watchMyRole(widget.groupId),
-          builder: (context, roleSnap) {
-            final isAdmin = roleSnap.data == GroupRole.admin;
-
-            return StreamBuilder<List<GroupMemberProfile>>(
-              stream: vm.listenMembersWithProfiles(widget.groupId),
-              builder: (context, snap) {
-                final members = snap.data ?? const <GroupMemberProfile>[];
-                if (snap.connectionState == ConnectionState.waiting && members.isEmpty) {
-                  return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-                }
-
-                return ListView.separated(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  itemCount: members.length,
-                  separatorBuilder: (_, __) => const Divider(color: AppColors.border),
-                  itemBuilder: (context, i) {
-                    final profile = members[i];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                      child: Row(
-                        children: [
-                          AppAvatar(name: profile.displayName, imageUrl: profile.photoUrl, size: 40),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(profile.displayName, style: textTheme.bodyLarge),
-                                if (profile.isAdmin)
-                                  Text(
-                                    'Admin',
-                                    style: textTheme.bodySmall?.copyWith(color: AppColors.headingPurple),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          if (isAdmin)
-                            PopupMenuButton<String>(
-                              icon: const Icon(Icons.more_vert, color: AppColors.dark2),
-                              onSelected: (action) {
-                                if (action == 'promote') _promote(profile);
-                                if (action == 'remove') _remove(profile);
-                              },
-                              itemBuilder: (context) => [
-                                if (!profile.isAdmin)
-                                  const PopupMenuItem(value: 'promote', child: Text('Promote to Admin')),
-                                PopupMenuItem(
-                                  value: 'remove',
-                                  child: Text('Remove', style: TextStyle(color: AppColors.error)),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
+        child: ListView.separated(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          itemCount: _members.length,
+          separatorBuilder: (_, __) => const Divider(color: AppColors.border),
+          itemBuilder: (context, i) {
+            final member = _members[i];
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              child: Row(
+                children: [
+                  AppAvatar(name: member.name, size: 40),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(member.name, style: textTheme.bodyLarge),
+                        if (member.isAdmin)
+                          Text('Admin', style: textTheme.bodySmall?.copyWith(color: AppColors.headingPurple)),
+                      ],
+                    ),
+                  ),
+                  if (_isAdmin)
+                    PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, color: AppColors.dark2),
+                      onSelected: (action) {
+                        if (action == 'promote') _promote(i);
+                        if (action == 'remove') _remove(i);
+                      },
+                      itemBuilder: (context) => [
+                        if (!member.isAdmin)
+                          const PopupMenuItem(value: 'promote', child: Text('Promote to Admin')),
+                        PopupMenuItem(
+                          value: 'remove',
+                          child: Text('Remove', style: TextStyle(color: AppColors.error)),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             );
           },
         ),

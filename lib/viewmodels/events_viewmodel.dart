@@ -1,167 +1,171 @@
-import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/services/alarm_permissions_service.dart';
+import '../core/services/alarm_scheduler.dart';
 import '../models/event_draft.dart';
-import '../models/event_model.dart';
-import '../widgets/common/event_card.dart';
+import '../models/group_event_model.dart';
 
-/// Event backend (product doc Part 5.7 / roadmap Phase 3 — CRUD only,
-/// no firing yet: that's the local-alarm + FCM phases downstream).
-///
-/// Same pattern as [GroupsViewModel]: screens never talk to `Firestore`
-/// directly. Reads are `Stream`s so Home's "Upcoming" list and Group
-/// Details' "Upcoming Events" update live the moment an event is
-/// created/edited/cancelled anywhere.
+/// Phase 3 — Event CRUD, backed by Firestore. Phase 4 hooks in here too:
+/// every successful create/edit (re)schedules the device-local exact
+/// alarm, and cancel tears it down — this is the single place Firestore
+/// writes and `AlarmScheduler` calls stay in lockstep, so a screen can
+/// never write an event without also scheduling (or dropping) its
+/// alarm.
 class EventsViewModel extends ChangeNotifier {
-  EventsViewModel({FirebaseFirestore? firestore, FirebaseAuth? firebaseAuth})
+  EventsViewModel({FirebaseFirestore? firestore, FirebaseAuth? auth})
       : _db = firestore ?? FirebaseFirestore.instance,
-        _auth = firebaseAuth ?? FirebaseAuth.instance;
+        _auth = auth ?? FirebaseAuth.instance;
 
   final FirebaseFirestore _db;
   final FirebaseAuth _auth;
 
   String get _uid {
     final uid = _auth.currentUser?.uid;
-    if (uid == null) throw StateError('EventsViewModel used while signed out.');
+    if (uid == null) throw StateError('EventsViewModel used with no signed-in user.');
     return uid;
   }
 
-  CollectionReference<Map<String, dynamic>> _eventsCol(String groupId) =>
-      _db.collection('groups').doc(groupId).collection('events');
+  String? _errorMessage;
+  String? get errorMessage => _errorMessage;
 
-  // ---- reads (live) -------------------------------------------------------
-
-  /// Upcoming (not-cancelled, not-yet-fired) events for one group — powers
-  /// Group Details' "Upcoming Events" section.
-  Stream<List<FirestoreEvent>> listenUpcomingEventsForGroup(String groupId) {
-    final nowUtc = Timestamp.fromDate(DateTime.now().toUtc());
-    return _eventsCol(groupId)
-        .where('cancelled', isEqualTo: false)
-        .where('timeUTC', isGreaterThanOrEqualTo: nowUtc)
+  /// Every upcoming event across every group the user is in, live —
+  /// backs Home's "Upcoming" section. Relies on `memberIds` being
+  /// denormalized onto each event doc (see `GroupEventModel`), so this
+  /// is one `collectionGroup` query instead of one listener per group.
+  Stream<List<GroupEventModel>> listenUpcomingEvents() {
+    final now = Timestamp.now();
+    return _db
+        .collectionGroup('events')
+        .where('memberIds', arrayContains: _uid)
+        .where('timeUTC', isGreaterThanOrEqualTo: now)
         .orderBy('timeUTC')
         .snapshots()
-        .map((snap) => snap.docs.map((d) => FirestoreEvent.fromDoc(d, groupId)).toList());
+        .map((qs) => qs.docs
+            .map((d) => GroupEventModel.fromDoc(d, d.reference.parent.parent!.id))
+            .toList());
   }
 
-  /// Upcoming events merged across several groups at once — powers
-  /// Home's "Upcoming" section, which spans every group the user is in.
-  ///
-  /// Firestore security rules can't filter a `collectionGroup('events')`
-  /// query down to "only groups I'm a member of" (rules reject the whole
-  /// query if any matched doc fails the rule) — so this fans out one
-  /// live query per group instead and merges client-side. Re-emits the
-  /// full merged, time-sorted list whenever *any* one group's events
-  /// change. Caller owns re-subscribing when the group list itself
-  /// changes (see `HomeScreen`, which rebuilds this from a group-id
-  /// list that's itself live).
-  Stream<List<FirestoreEvent>> listenUpcomingEventsAcrossGroups(List<String> groupIds) {
-    if (groupIds.isEmpty) return Stream.value(const <FirestoreEvent>[]);
-
-    late final StreamController<List<FirestoreEvent>> controller;
-    final latest = <String, List<FirestoreEvent>>{};
-    final subs = <StreamSubscription<List<FirestoreEvent>>>[];
-
-    void emitMerged() {
-      final merged = latest.values.expand((e) => e).toList()
-        ..sort((a, b) => a.timeUTC.compareTo(b.timeUTC));
-      controller.add(merged);
-    }
-
-    controller = StreamController<List<FirestoreEvent>>.broadcast(
-      onListen: () {
-        for (final groupId in groupIds) {
-          subs.add(listenUpcomingEventsForGroup(groupId).listen((events) {
-            latest[groupId] = events;
-            emitMerged();
-          }));
-        }
-      },
-      onCancel: () {
-        for (final s in subs) {
-          s.cancel();
-        }
-      },
-    );
-
-    return controller.stream;
+  Stream<List<GroupEventModel>> listenGroupEvents(String groupId) {
+    final now = Timestamp.now();
+    return _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('events')
+        .where('timeUTC', isGreaterThanOrEqualTo: now)
+        .orderBy('timeUTC')
+        .snapshots()
+        .map((qs) => qs.docs.map((d) => GroupEventModel.fromDoc(d, groupId)).toList());
   }
 
-  Stream<FirestoreEvent?> watchEvent(String groupId, String eventId) {
-    return _eventsCol(groupId)
+  Stream<GroupEventModel?> listenEvent(String groupId, String eventId) {
+    return _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('events')
         .doc(eventId)
         .snapshots()
-        .map((doc) => doc.exists ? FirestoreEvent.fromDoc(doc, groupId) : null);
+        .map((doc) => doc.exists ? GroupEventModel.fromDoc(doc, groupId) : null);
   }
 
-  // ---- writes ---------------------------------------------------------
+  /// [memberIds] should be the group's current `memberIds` (from
+  /// `GroupsViewModel.listenGroups`/`listenGroup`) — pass it in rather
+  /// than re-fetching here, since the caller already has it live.
+  Future<String?> createEvent(EventDraft draft, {required List<String> memberIds}) async {
+    try {
+      final ref = _db
+          .collection('groups')
+          .doc(draft.groupId)
+          .collection('events')
+          .doc();
+      await ref.set(GroupEventModel.mapFromDraft(
+        draft: draft,
+        memberIds: memberIds,
+        createdBy: _uid,
+      ));
 
-  /// Writes a new event doc from a Create Event flow draft. [draft.groupId]
-  /// must be set (picked on the Create Event screen) — throws otherwise.
-  Future<FirestoreEvent> createEvent(EventDraft draft) async {
-    final groupId = draft.groupId;
-    if (groupId == null) {
-      throw StateError('EventDraft.groupId must be set before createEvent — pick a group first.');
+      // Phase 4: schedule the local exact alarm now that the event has
+      // a real id. Permission requests are contextual (first time this
+      // runs, per event kind) — a no-op if already granted. Kept in its
+      // own try/catch: the Firestore write already succeeded, so a
+      // scheduling failure (e.g. permission denied) shouldn't be
+      // reported back as "event creation failed" — the event exists,
+      // it just won't ring locally until the permission issue's fixed.
+      draft.eventId = ref.id;
+      try {
+        await AlarmPermissionsService.requestContextualPermissions();
+        await AlarmScheduler.scheduleForEvent(draft);
+      } catch (e) {
+        debugPrint('AlarmScheduler.scheduleForEvent failed: $e');
+      }
+
+      return ref.id;
+    } catch (e) {
+      _errorMessage = 'Could not create event. Please try again.';
+      notifyListeners();
+      return null;
     }
-
-    final ref = _eventsCol(groupId).doc();
-    final title = draft.title.trim().isNotEmpty
-        ? draft.title.trim()
-        : (draft.kind == EventKind.alarm ? 'Alarm' : 'Reminder');
-
-    final event = FirestoreEvent(
-      id: ref.id,
-      groupId: groupId,
-      kind: draft.kind,
-      title: title,
-      timeUTC: draft.toUtcDateTime(),
-      repeatRule: draft.repeatRule,
-      customDays: draft.customDays.toList(),
-      createdBy: _uid,
-      snoozeEnabled: draft.snoozeEnabled,
-      confirmationPhrase: draft.confirmationPhrase,
-      useSimpleTap: draft.useSimpleTap,
-    );
-
-    await ref.set(event.toMap());
-    return event;
   }
 
-  /// Overwrites an existing event doc from an edited draft. [draft.id] and
-  /// [draft.groupId] must both be set (i.e. [EventDraft.isPersisted]).
-  Future<void> editEvent(EventDraft draft) async {
-    final groupId = draft.groupId;
-    final id = draft.id;
-    if (groupId == null || id == null) {
-      throw StateError('EventDraft.id/groupId must be set before editEvent — not a persisted event.');
+  Future<bool> editEvent(EventDraft draft) async {
+    final eventId = draft.eventId;
+    if (eventId == null) {
+      throw ArgumentError('editEvent requires draft.eventId — use createEvent for new events.');
     }
+    try {
+      final date = draft.date ?? DateTime.now();
+      final time = draft.time ?? DateTime.now();
+      final localFire = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      await _db
+          .collection('groups')
+          .doc(draft.groupId)
+          .collection('events')
+          .doc(eventId)
+          .update({
+        'title': draft.title,
+        'timeUTC': Timestamp.fromDate(localFire.toUtc()),
+        'repeatRule': draft.repeatRule.name,
+        'customDays': draft.customDays.toList(),
+        'snoozeEnabled': draft.snoozeEnabled,
+        'confirmationPhrase': draft.confirmationPhrase,
+        'useSimpleTap': draft.useSimpleTap,
+      });
 
-    final title = draft.title.trim().isNotEmpty
-        ? draft.title.trim()
-        : (draft.kind == EventKind.alarm ? 'Alarm' : 'Reminder');
+      // Phase 4: time/repeat/task may have changed — cancel the old
+      // alarm and schedule fresh rather than trying to diff what moved.
+      try {
+        await AlarmScheduler.scheduleForEvent(draft);
+      } catch (e) {
+        debugPrint('AlarmScheduler.scheduleForEvent failed: $e');
+      }
 
-    final event = FirestoreEvent(
-      id: id,
-      groupId: groupId,
-      kind: draft.kind,
-      title: title,
-      timeUTC: draft.toUtcDateTime(),
-      repeatRule: draft.repeatRule,
-      customDays: draft.customDays.toList(),
-      createdBy: _uid,
-      snoozeEnabled: draft.snoozeEnabled,
-      confirmationPhrase: draft.confirmationPhrase,
-      useSimpleTap: draft.useSimpleTap,
-    );
-
-    await _eventsCol(groupId).doc(id).update(event.toMap());
+      return true;
+    } catch (e) {
+      _errorMessage = 'Could not save changes. Please try again.';
+      notifyListeners();
+      return false;
+    }
   }
 
-  /// Flags the event cancelled rather than deleting the doc — keeps it
-  /// visible in Event History (Phase 10) instead of vanishing outright.
-  Future<void> cancelEvent(String groupId, String eventId) async {
-    await _eventsCol(groupId).doc(eventId).update({'cancelled': true});
+  Future<bool> cancelEvent(String groupId, String eventId) async {
+    try {
+      await _db.collection('groups').doc(groupId).collection('events').doc(eventId).delete();
+      try {
+        await AlarmScheduler.cancelForEvent(eventId);
+      } catch (e) {
+        debugPrint('AlarmScheduler.cancelForEvent failed: $e');
+      }
+      return true;
+    } catch (e) {
+      _errorMessage = 'Could not cancel event. Please try again.';
+      notifyListeners();
+      return false;
+    }
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
   }
 }

@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
-import '../../models/group_model.dart';
-import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/event_card.dart';
 import 'event_time_setup_screen.dart';
@@ -14,20 +11,28 @@ import 'event_time_setup_screen.dart';
 /// Reminder, two large cards) + group selector, then into Time & Repeat
 /// Setup.
 ///
-/// Group list is live via [GroupsViewModel.listenGroups] — picks from
-/// groups the current user is actually in, not a demo list.
+/// TODO: `_demoGroups` should come from a GroupsViewModel (the groups
+/// the current user belongs to).
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key, this.preselectedGroupId});
+  const CreateEventScreen({super.key, this.preselectedGroup});
 
-  final String? preselectedGroupId;
+  final String? preselectedGroup;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
 }
 
 class _CreateEventScreenState extends State<CreateEventScreen> {
+  static const _demoGroups = ['Exam Squad', 'Design Team', 'Gym Crew'];
+
   EventKind _kind = EventKind.alarm;
-  Group? _selectedGroup;
+  String? _selectedGroup;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedGroup = widget.preselectedGroup ?? _demoGroups.first;
+  }
 
   Widget _typeCard({
     required EventKind kind,
@@ -100,44 +105,12 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               const SizedBox(height: AppSpacing.lg),
               Text('Group', style: textTheme.bodyLarge),
               const SizedBox(height: AppSpacing.sm),
-              StreamBuilder<List<Group>>(
-                stream: context.read<GroupsViewModel>().listenGroups(),
-                builder: (context, snap) {
-                  final groups = snap.data ?? const <Group>[];
-
-                  if (snap.connectionState == ConnectionState.waiting && groups.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                      child: LinearProgressIndicator(color: AppColors.primary),
-                    );
-                  }
-                  if (groups.isEmpty) {
-                    return Text(
-                      "You're not in any groups yet — create or join one first.",
-                      style: textTheme.bodyMedium,
-                    );
-                  }
-
-                  _selectedGroup ??= groups.firstWhere(
-                    (g) => g.id == widget.preselectedGroupId,
-                    orElse: () => groups.first,
-                  );
-                  // Keep selection valid if the picked group disappears
-                  // (e.g. left/deleted) while this screen is open.
-                  if (!groups.any((g) => g.id == _selectedGroup!.id)) {
-                    _selectedGroup = groups.first;
-                  }
-
-                  return DropdownButtonFormField<String>(
-                    value: _selectedGroup!.id,
-                    items: groups
-                        .map((g) => DropdownMenuItem(value: g.id, child: Text(g.name)))
-                        .toList(),
-                    onChanged: (id) => setState(
-                      () => _selectedGroup = groups.firstWhere((g) => g.id == id),
-                    ),
-                  );
-                },
+              DropdownButtonFormField<String>(
+                value: _selectedGroup,
+                items: _demoGroups
+                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedGroup = v),
               ),
               const Spacer(),
               PrimaryButton(
@@ -146,11 +119,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
                     ? () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => EventTimeSetupScreen(
-                              draft: EventDraft(
-                                groupId: _selectedGroup!.id,
-                                groupName: _selectedGroup!.name,
-                                kind: _kind,
-                              ),
+                              draft: EventDraft(groupName: _selectedGroup!, kind: _kind),
                             ),
                           ),
                         )

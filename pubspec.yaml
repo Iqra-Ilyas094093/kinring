@@ -42,11 +42,33 @@ dependencies:
   google_fonts: ^6.2.1
   firebase_core: ^4.14.0
   firebase_auth: ^6.6.1
-  cloud_firestore: ^6.1.0
+
+  # Phase 2/3 group + event backend already imports this — was missing
+  # from pubspec (pre-existing gap, fixed here since Phase 4 depends on
+  # GroupEventModel/EventsViewModel compiling).
+  cloud_firestore: ^6.0.2
 
   # Google Sign-In — v7+ uses the new GoogleSignIn.instance API
   # (initialize/authenticate), replacing the old GoogleSignIn().signIn().
   google_sign_in: ^7.2.0
+
+  # Phase 4 — local exact alarm (device-side trigger, works offline).
+  # Schedules Android AlarmManager exact alarms; self-persists through
+  # reboot via rescheduleOnReboot, no manual BOOT_COMPLETED receiver code
+  # needed.
+  android_alarm_manager_plus: ^4.0.6
+
+  # Full-screen alarm UI when the alarm fires — AlarmManager itself has
+  # no UI, so the fire callback shows a fullScreenIntent notification
+  # (same mechanism real alarm-clock apps use) that launches the app
+  # straight into AlarmRingingScreen/ReminderNotificationCardScreen even
+  # from a locked screen.
+  flutter_local_notifications: ^19.0.0
+
+  # Contextual runtime permission requests (exact alarm, battery
+  # optimization exemption, notifications) — requested on first event
+  # create per doc Phase 4 step 5, not as an upfront onboarding flow.
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
