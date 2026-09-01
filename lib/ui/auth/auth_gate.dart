@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/fcm_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../core_navigation/core_navigation_screen.dart';
@@ -45,6 +46,11 @@ class AuthGate extends StatelessWidget {
         if (!isGoogleAccount && !user.emailVerified) {
           return const EmailVerificationScreen();
         }
+
+        // Phase 5 — fire-and-forget, every time this branch is reached
+        // (not just first sign-in): cheap arrayUnion, and it's how a
+        // second device or a reinstall gets its token registered too.
+        FcmService.syncTokenForCurrentUser();
 
         return const CoreNavigationScreen();
       },

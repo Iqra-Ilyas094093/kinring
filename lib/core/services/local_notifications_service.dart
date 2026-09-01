@@ -92,6 +92,34 @@ class LocalNotificationsService {
     );
   }
 
+  /// Phase 5 — reminder push (doc 5.8.4). Unlike [showAlarmNotification]
+  /// this is a normal heads-up notification, not `fullScreenIntent`/
+  /// `ongoing` — Reminder kind is push-only and never gates the screen.
+  /// Tapping it routes through the same `payload` → [EventTrigger.fire]
+  /// path, landing on [ReminderNotificationCardScreen] via `EventDraft.kind`.
+  static Future<void> showReminderNotification({
+    required int id,
+    required String title,
+    required String body,
+    required String payloadJson,
+  }) async {
+    const details = AndroidNotificationDetails(
+      _channelId,
+      'Alarms & Reminders',
+      channelDescription: 'KinRing group alarms and reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.reminder,
+    );
+    await _plugin.show(
+      id,
+      title,
+      body,
+      const NotificationDetails(android: details),
+      payload: payloadJson,
+    );
+  }
+
   static Future<void> dismiss(int id) => _plugin.cancel(id);
 
   /// Cold-start case: app was fully killed, user tapped the alarm

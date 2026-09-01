@@ -58,6 +58,11 @@ dependencies:
   # needed.
   android_alarm_manager_plus: ^4.0.6
 
+  # Phase 5 — FCM push. Secondary sync layer on top of Phase 4's local
+  # alarm (cron backup trigger, admin "Ring Now" broadcast) plus the
+  # channel for activity notifications (member cleared/snoozed/joined).
+  firebase_messaging: ^16.0.4
+
   # Full-screen alarm UI when the alarm fires — AlarmManager itself has
   # no UI, so the fire callback shows a fullScreenIntent notification
   # (same mechanism real alarm-clock apps use) that launches the app

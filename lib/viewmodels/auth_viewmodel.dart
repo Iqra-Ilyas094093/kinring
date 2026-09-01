@@ -1,6 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/services/fcm_service.dart';
 import '../core/services/google_auth_service.dart';
 import '../models/auth_flow_status.dart';
 
@@ -158,6 +159,9 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
+    // Must run before _auth.signOut() — needs currentUser to still be
+    // non-null to know which users/{uid} doc to pull the token off.
+    await FcmService.clearTokenForCurrentUser();
     await _googleAuthService.signOut();
     await _auth.signOut();
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'app/app.dart';
 import 'core/services/alarm_scheduler.dart';
+import 'core/services/fcm_service.dart';
 import 'core/services/local_notifications_service.dart';
 import 'firebase_options.dart';
 
@@ -23,9 +24,16 @@ void main() async {
   await AlarmScheduler.initialize();
   await LocalNotificationsService.initialize(navigatorKey: navigatorKey);
 
+  // Phase 5 — must be initialized before runApp so the background
+  // handler is registered before any message can arrive.
+  await FcmService.initialize(navigatorKey: navigatorKey);
+
   runApp(const KinRingApp());
 
-  // Cold start via a tapped alarm notification (app was fully killed) —
-  // needs the widget tree attached first, so this runs after `runApp`.
+  // Cold start via a tapped notification (app was fully killed) — needs
+  // the widget tree attached first, so these run after `runApp`. Both
+  // are safe to await in sequence: at most one will actually have a
+  // launch payload.
   await LocalNotificationsService.routeIfLaunchedFromNotification();
+  await FcmService.routeIfLaunchedFromMessage();
 }
