@@ -14,6 +14,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // 1. Enable core library desugaring for Kotlin DSL
+        isCoreLibraryDesugaringEnabled = true
+
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -40,6 +43,11 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+// 2. Add the missing dependencies block at the bottom of the file
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {
