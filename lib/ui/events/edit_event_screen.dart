@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../viewmodels/events_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/note_text.dart';
@@ -24,6 +26,7 @@ class EditEventScreen extends StatefulWidget {
 
 class _EditEventScreenState extends State<EditEventScreen> {
   late final _phraseController = TextEditingController(text: widget.draft.confirmationPhrase);
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -63,6 +66,27 @@ class _EditEventScreenState extends State<EditEventScreen> {
       backgroundColor: AppColors.white,
       side: BorderSide(color: selected ? AppColors.primary : AppColors.border),
     );
+  }
+
+  Future<void> _save() async {
+    if (!widget.draft.isPersisted) {
+      // Shouldn't happen — this screen is only reached from a loaded,
+      // already-created event — but fail loudly rather than silently
+      // no-op if it ever is.
+      AppToast.show(context, "Can't save — this event isn't linked to a group yet.", type: AppToastType.error);
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await context.read<EventsViewModel>().editEvent(widget.draft);
+      if (!mounted) return;
+      AppToast.show(context, 'Event updated', type: AppToastType.success);
+      Navigator.of(context).pop();
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(context, "Couldn't save changes. Try again.", type: AppToastType.error);
+      setState(() => _saving = false);
+    }
   }
 
   @override
@@ -128,11 +152,8 @@ class _EditEventScreenState extends State<EditEventScreen> {
             const SizedBox(height: AppSpacing.xl),
             PrimaryButton(
               label: 'Save Changes',
-              onPressed: () {
-                // TODO: call EventsViewModel.updateEvent(draft).
-                AppToast.show(context, 'Event updated', type: AppToastType.success);
-                Navigator.of(context).pop();
-              },
+              isLoading: _saving,
+              onPressed: !_saving ? _save : null,
             ),
           ],
         ),

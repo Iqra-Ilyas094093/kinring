@@ -21,8 +21,9 @@ import 'event_history_screen.dart';
 /// endpoint described in doc Part 4 to broadcast push-only, bypassing
 /// silent mode, per doc Part 3 step 6.
 class AdminPanelScreen extends StatelessWidget {
-  const AdminPanelScreen({super.key, required this.groupName});
+  const AdminPanelScreen({super.key, required this.groupId, required this.groupName});
 
+  final String groupId;
   final String groupName;
 
   static const _demoEvents = [
@@ -117,7 +118,7 @@ class AdminPanelScreen extends StatelessWidget {
               label: 'Group Settings',
               leading: const Icon(Icons.settings_outlined, color: AppColors.dark1),
               onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => GroupSettingsScreen(groupName: groupName)),
+                MaterialPageRoute(builder: (_) => GroupSettingsScreen(groupId: groupId, groupName: groupName)),
               ),
             ),
           ],

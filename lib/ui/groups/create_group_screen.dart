@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/app_avatar.dart';
+import '../../widgets/feedback/app_toast.dart';
 import '../../widgets/inputs/app_text_field.dart';
 import 'invite_members_screen.dart';
 
@@ -19,11 +22,33 @@ class CreateGroupScreen extends StatefulWidget {
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _nameController = TextEditingController();
+  bool _submitting = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _create() async {
+    setState(() => _submitting = true);
+    try {
+      final group = await context.read<GroupsViewModel>().createGroup(_nameController.text.trim());
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => InviteMembersScreen(
+            groupId: group.id,
+            groupName: group.name,
+            inviteCode: group.inviteCode,
+          ),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      AppToast.show(context, "Couldn't create group. Try again.", type: AppToastType.error);
+      setState(() => _submitting = false);
+    }
   }
 
   @override
@@ -73,20 +98,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               const SizedBox(height: AppSpacing.xl),
               PrimaryButton(
                 label: 'Create Group',
-                onPressed: _nameController.text.trim().isNotEmpty
-                    ? () {
-                        // TODO: call GroupsViewModel.createGroup(name) and
-                        // use the returned invite code below.
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => InviteMembersScreen(
-                              groupName: _nameController.text.trim(),
-                              inviteCode: 'KR-DEMO1',
-                            ),
-                          ),
-                        );
-                      }
-                    : null,
+                isLoading: _submitting,
+                onPressed: !_submitting && _nameController.text.trim().isNotEmpty ? _create : null,
               ),
             ],
           ),

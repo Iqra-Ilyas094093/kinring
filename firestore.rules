@@ -1,0 +1,65 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isMember(groupId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    function isAdmin(groupId) {
+      return signedIn() &&
+        get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // users/{uid} — a user manages their own profile; any signed-in
+    // member can read (needed for avatars/names in member lists).
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+
+    match /groups/{groupId} {
+      // Anyone signed in can read a group doc by ID (needed to preview
+      // a group name from an invite code before joining) — but only a
+      // member can list/query groups (memberIds is checked client-side
+      // via listenGroups(), which queries `where memberIds contains uid`).
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isMember(groupId);
+      allow delete: if isAdmin(groupId);
+
+      match /members/{uid} {
+        allow read: if isMember(groupId);
+        // Self-join (create own member doc) or admin adding/managing others.
+        allow create: if signedIn() && (request.auth.uid == uid || isAdmin(groupId));
+        allow update: if isAdmin(groupId) || request.auth.uid == uid;
+        allow delete: if isAdmin(groupId) || request.auth.uid == uid;
+      }
+
+      match /events/{eventId} {
+        allow read: if isMember(groupId);
+        allow create: if isMember(groupId) && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isMember(groupId);
+        allow delete: if isAdmin(groupId) || isMember(groupId);
+
+        match /statuses/{uid} {
+          allow read: if isMember(groupId);
+          // Each member writes only their own status.
+          allow write: if isMember(groupId) && request.auth.uid == uid;
+        }
+      }
+    }
+
+    // notifications/{uid}/items/{id} — private to the owning user.
+    match /notifications/{uid}/items/{id} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid;
+    }
+  }
+}

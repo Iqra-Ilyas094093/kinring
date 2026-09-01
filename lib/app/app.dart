@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_theme.dart';
 import '../ui/auth/auth_gate.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/events_viewmodel.dart';
+import '../viewmodels/groups_viewmodel.dart';
 
 /// Root widget. This is the only place `MaterialApp` is constructed, and
 /// the only place `theme:` is set — every screen inherits it via
@@ -18,8 +20,12 @@ class KinRingApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AuthViewModel(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthViewModel()),
+        ChangeNotifierProvider(create: (_) => GroupsViewModel()),
+        ChangeNotifierProvider(create: (_) => EventsViewModel()),
+      ],
       child: MaterialApp(
         title: 'KinRing',
         debugShowCheckedModeBanner: false,
