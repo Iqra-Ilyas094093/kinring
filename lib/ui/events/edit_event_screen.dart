@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../viewmodels/events_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/note_text.dart';
@@ -13,6 +15,8 @@ import '../../widgets/inputs/app_text_field.dart';
 /// Edit Event screen (product doc 5.7.6). Same fields as the Create
 /// Event flow, combined onto one screen and pre-filled, per the doc:
 /// "Same layout as Create Event (combined, pre-filled)".
+///
+/// Live data: [EventsViewModel.editEvent] on Save.
 class EditEventScreen extends StatefulWidget {
   const EditEventScreen({super.key, required this.draft});
 
@@ -24,6 +28,7 @@ class EditEventScreen extends StatefulWidget {
 
 class _EditEventScreenState extends State<EditEventScreen> {
   late final _phraseController = TextEditingController(text: widget.draft.confirmationPhrase);
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -127,12 +132,23 @@ class _EditEventScreenState extends State<EditEventScreen> {
             ],
             const SizedBox(height: AppSpacing.xl),
             PrimaryButton(
-              label: 'Save Changes',
-              onPressed: () {
-                // TODO: call EventsViewModel.updateEvent(draft).
-                AppToast.show(context, 'Event updated', type: AppToastType.success);
-                Navigator.of(context).pop();
-              },
+              label: _saving ? 'Saving…' : 'Save Changes',
+              onPressed: _saving
+                  ? null
+                  : () async {
+                      setState(() => _saving = true);
+                      final ok = widget.draft.eventId != null
+                          ? await context.read<EventsViewModel>().editEvent(widget.draft)
+                          : false;
+                      if (!mounted) return;
+                      setState(() => _saving = false);
+                      if (!ok) {
+                        AppToast.show(context, 'Could not save changes. Please try again.');
+                        return;
+                      }
+                      AppToast.show(context, 'Event updated', type: AppToastType.success);
+                      Navigator.of(context).pop();
+                    },
             ),
           ],
         ),

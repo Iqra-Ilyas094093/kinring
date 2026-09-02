@@ -15,13 +15,9 @@ import 'notification_settings_screen.dart';
 /// Settings tab (product doc 5.5.3 + 5.10). Entry point into the four
 /// sub-screens; owns nothing but navigation + logout.
 ///
-/// TODO: wire profile photo/name/email to a UserViewModel once one
-/// exists (mirrors AuthViewModel pattern used in the auth flow).
+/// Live data: [AuthViewModel.currentUser] for name/email/photo.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  static const _demoName = 'Alex Rivera';
-  static const _demoEmail = 'alex.rivera@example.com';
 
   Future<void> _confirmLogout(BuildContext context) async {
     final confirmed = await ConfirmationDialog.show(
@@ -42,6 +38,9 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final user = context.watch<AuthViewModel>().currentUser;
+    final name = (user?.displayName?.trim().isNotEmpty ?? false) ? user!.displayName!.trim() : 'Member';
+    final email = user?.email ?? '';
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -63,14 +62,14 @@ class SettingsScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
                 child: Row(
                   children: [
-                    const AppAvatar(name: _demoName, size: 56),
+                    AppAvatar(name: name, imageUrl: user?.photoURL, size: 56),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_demoName, style: textTheme.titleLarge),
-                          Text(_demoEmail, style: textTheme.bodySmall),
+                          Text(name, style: textTheme.titleLarge),
+                          Text(email, style: textTheme.bodySmall),
                         ],
                       ),
                     ),

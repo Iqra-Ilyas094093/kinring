@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../models/group_model.dart';
+import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/common/group_card.dart';
 import '../../widgets/inputs/app_text_field.dart';
@@ -12,7 +15,8 @@ import 'join_group_screen.dart';
 /// Groups tab (product doc 5.5.2). List of the user's groups, or an
 /// empty state with Create/Join actions.
 ///
-/// TODO: replace demo data with a GroupsViewModel backed by Firestore.
+/// Live data: [GroupsViewModel.listenGroups]. Search filters that live
+/// stream locally by name — no separate query.
 class GroupsScreen extends StatefulWidget {
   const GroupsScreen({super.key});
 
@@ -21,12 +25,6 @@ class GroupsScreen extends StatefulWidget {
 }
 
 class _GroupsScreenState extends State<GroupsScreen> {
-  static const _demoGroups = [
-    (name: 'Exam Squad', members: ['Alex', 'Sam', 'Priya', 'Jon'], next: 'Alarm · 6:00 AM'),
-    (name: 'Design Team', members: ['Alex', 'Mira'], next: 'Reminder · 9:00 AM'),
-    (name: 'Gym Crew', members: ['Alex', 'Dev', 'Lee'], next: null),
-  ];
-
   bool _searching = false;
   final _searchController = TextEditingController();
 
@@ -54,11 +52,8 @@ class _GroupsScreenState extends State<GroupsScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final groupsVm = context.read<GroupsViewModel>();
     final query = _searchController.text.trim().toLowerCase();
-    final visibleGroups = query.isEmpty
-        ? _demoGroups
-        : _demoGroups.where((g) => g.name.toLowerCase().contains(query)).toList();
-    final hasGroups = _demoGroups.isNotEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -110,34 +105,15 @@ class _GroupsScreenState extends State<GroupsScreen> {
                 ),
               ),
             Expanded(
-              child: hasGroups
-                  ? (visibleGroups.isEmpty
-                      ? Center(
-                          child: EmptyState(
-                            icon: Icons.search_off_rounded,
-                            title: 'No groups match "$query"',
-                            subtitle: 'Try a different name.',
-                          ),
-                        )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(AppSpacing.lg),
-                          itemCount: visibleGroups.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
-                          itemBuilder: (context, i) {
-                            final group = visibleGroups[i];
-                            return GroupCard(
-                              groupName: group.name,
-                              memberNames: group.members,
-                              nextEventLabel: group.next,
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => GroupDetailsScreen(groupName: group.name),
-                                ),
-                              ),
-                            );
-                          },
-                        ))
-                  : Center(
+              child: StreamBuilder<List<GroupModel>>(
+                stream: groupsVm.listenGroups(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final groups = snapshot.data ?? const <GroupModel>[];
+                  if (groups.isEmpty) {
+                    return Center(
                       child: EmptyState(
                         icon: Icons.groups_outlined,
                         title: "You're not in any groups yet",
@@ -145,7 +121,53 @@ class _GroupsScreenState extends State<GroupsScreen> {
                         actionLabel: 'Create a Group',
                         onAction: () => _openCreate(context),
                       ),
-                    ),
+                    );
+                  }
+                  final visibleGroups = query.isEmpty
+                      ? groups
+                      : groups.where((g) => g.name.toLowerCase().contains(query)).toList();
+                  if (visibleGroups.isEmpty) {
+                    return Center(
+                      child: EmptyState(
+                        icon: Icons.search_off_rounded,
+                        title: 'No groups match "$query"',
+                        subtitle: 'Try a different name.',
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    itemCount: visibleGroups.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.sm),
+                    itemBuilder: (context, i) {
+                      final group = visibleGroups[i];
+                      return StreamBuilder<List<GroupMemberModel>>(
+                        stream: groupsVm.listenMembers(group.id),
+                        builder: (context, memberSnap) {
+                          final memberNames = (memberSnap.data ?? const <GroupMemberModel>[])
+                              .map((m) => m.displayName ?? 'Member')
+                              .toList();
+                          return GroupCard(
+                            groupName: group.name,
+                            photoUrl: group.photoUrl,
+                            memberNames: memberNames.isEmpty
+                                ? List.filled(group.memberCount, 'Member')
+                                : memberNames,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => GroupDetailsScreen(
+                                  groupId: group.id,
+                                  groupName: group.name,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
             ),
           ],
         ),

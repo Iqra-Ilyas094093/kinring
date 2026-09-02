@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../models/group_model.dart';
+import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/countdown_text.dart';
 import '../../widgets/common/event_card.dart';
@@ -10,14 +13,14 @@ import '../../widgets/common/status_badge.dart';
 
 /// Live Group Status Screen (product doc 5.9.1). Live elapsed-time
 /// counter since the event fired, and a member list with color-coded
-/// status badges that update in real time. Reached from: the Ringing/
-/// Task flow once a member clears their task, or from Admin Panel's
-/// "Ring Now".
+/// status badges.
 ///
-/// TODO: replace the demo timer/list with a live Firestore listener via
-/// an EventStatusViewModel; auto-navigate back to Home once every member
-/// shows `cleared` (per doc: "auto-navigates back to Home once all
-/// members have cleared").
+/// Live data: [GroupsViewModel.listenMembers] for the real roster. Every
+/// member shows "Pending" — live cleared/ringing/snoozed badges and the
+/// auto-navigate-when-all-cleared behavior both need the `statuses`
+/// subcollection from Phase 8 (Part 11), not built yet (you're through
+/// Phase 6). Wire an EventStatusViewModel reading
+/// `groups/{id}/events/{id}/statuses` next to close this out.
 class LiveGroupStatusScreen extends StatelessWidget {
   LiveGroupStatusScreen({super.key, required this.draft, DateTime? startedAt})
       : startedAt = startedAt ?? DateTime.now();
@@ -25,20 +28,13 @@ class LiveGroupStatusScreen extends StatelessWidget {
   final EventDraft draft;
   final DateTime startedAt;
 
-  static const _demoParticipants = [
-    (name: 'Alex Rivera', status: EventMemberStatus.cleared),
-    (name: 'Sam Chen', status: EventMemberStatus.ringing),
-    (name: 'Priya Nair', status: EventMemberStatus.snoozed),
-    (name: 'Jon Kim', status: EventMemberStatus.pending),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final title = draft.title.trim().isEmpty
         ? (draft.kind == EventKind.alarm ? 'Alarm' : 'Reminder')
         : draft.title.trim();
-    final clearedCount = _demoParticipants.where((p) => p.status == EventMemberStatus.cleared).length;
+    final groupsVm = context.read<GroupsViewModel>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -58,32 +54,40 @@ class LiveGroupStatusScreen extends StatelessWidget {
                   CountdownText(startTime: startedAt, style: textTheme.headlineMedium),
                 ],
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '$clearedCount of ${_demoParticipants.length} cleared',
-                style: textTheme.bodySmall?.copyWith(color: AppColors.headingPurple),
-              ),
               const SizedBox(height: AppSpacing.lg),
               const Divider(color: AppColors.border),
               Expanded(
-                child: ListView.separated(
-                  itemCount: _demoParticipants.length,
-                  separatorBuilder: (_, __) => const Divider(color: AppColors.border),
-                  itemBuilder: (context, i) {
-                    final p = _demoParticipants[i];
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                      child: Row(
-                        children: [
-                          AppAvatar(name: p.name, size: 40),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(child: Text(p.name, style: textTheme.bodyLarge)),
-                          StatusBadge(status: p.status),
-                        ],
+                child: draft.groupId.isEmpty
+                    ? const SizedBox.shrink()
+                    : StreamBuilder<List<GroupMemberModel>>(
+                        stream: groupsVm.listenMembers(draft.groupId),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return const Center(child: CircularProgressIndicator());
+                          }
+                          final members = snapshot.data ?? const <GroupMemberModel>[];
+                          return ListView.separated(
+                            itemCount: members.length,
+                            separatorBuilder: (_, __) => const Divider(color: AppColors.border),
+                            itemBuilder: (context, i) {
+                              final member = members[i];
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                                child: Row(
+                                  children: [
+                                    AppAvatar(name: member.displayName ?? 'Member', imageUrl: member.photoUrl, size: 40),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Text(member.displayName ?? 'Member', style: textTheme.bodyLarge),
+                                    ),
+                                    const StatusBadge(status: EventMemberStatus.pending),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),

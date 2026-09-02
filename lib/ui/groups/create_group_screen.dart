@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/app_avatar.dart';
+import '../../widgets/feedback/app_toast.dart';
 import '../../widgets/inputs/app_text_field.dart';
 import 'invite_members_screen.dart';
 
 /// Create Group screen (product doc 5.6.1). Group name + optional photo,
 /// then straight into Invite Members so the creator can add people right
 /// away.
+///
+/// Live data: [GroupsViewModel.createGroup] — the returned group's real
+/// invite code is what Invite Members shows next.
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
 
@@ -19,11 +25,28 @@ class CreateGroupScreen extends StatefulWidget {
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _nameController = TextEditingController();
+  bool _creating = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _create() async {
+    setState(() => _creating = true);
+    final group = await context.read<GroupsViewModel>().createGroup(_nameController.text.trim());
+    if (!mounted) return;
+    setState(() => _creating = false);
+    if (group == null) {
+      AppToast.show(context, 'Could not create group. Please try again.');
+      return;
+    }
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => InviteMembersScreen(groupName: group.name, inviteCode: group.inviteCode),
+      ),
+    );
   }
 
   @override
@@ -72,21 +95,8 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
               PrimaryButton(
-                label: 'Create Group',
-                onPressed: _nameController.text.trim().isNotEmpty
-                    ? () {
-                        // TODO: call GroupsViewModel.createGroup(name) and
-                        // use the returned invite code below.
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(
-                            builder: (_) => InviteMembersScreen(
-                              groupName: _nameController.text.trim(),
-                              inviteCode: 'KR-DEMO1',
-                            ),
-                          ),
-                        );
-                      }
-                    : null,
+                label: _creating ? 'Creating…' : 'Create Group',
+                onPressed: _nameController.text.trim().isNotEmpty && !_creating ? _create : null,
               ),
             ],
           ),

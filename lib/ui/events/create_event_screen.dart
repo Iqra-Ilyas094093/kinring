@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../models/group_model.dart';
+import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/event_card.dart';
 import 'event_time_setup_screen.dart';
@@ -11,28 +14,19 @@ import 'event_time_setup_screen.dart';
 /// Reminder, two large cards) + group selector, then into Time & Repeat
 /// Setup.
 ///
-/// TODO: `_demoGroups` should come from a GroupsViewModel (the groups
-/// the current user belongs to).
+/// Live data: [GroupsViewModel.listenGroups] backs the group dropdown.
 class CreateEventScreen extends StatefulWidget {
-  const CreateEventScreen({super.key, this.preselectedGroup});
+  const CreateEventScreen({super.key, this.preselectedGroupId});
 
-  final String? preselectedGroup;
+  final String? preselectedGroupId;
 
   @override
   State<CreateEventScreen> createState() => _CreateEventScreenState();
 }
 
 class _CreateEventScreenState extends State<CreateEventScreen> {
-  static const _demoGroups = ['Exam Squad', 'Design Team', 'Gym Crew'];
-
   EventKind _kind = EventKind.alarm;
-  String? _selectedGroup;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedGroup = widget.preselectedGroup ?? _demoGroups.first;
-  }
+  String? _selectedGroupId;
 
   Widget _typeCard({
     required EventKind kind,
@@ -73,6 +67,7 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final groupsVm = context.read<GroupsViewModel>();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -105,25 +100,55 @@ class _CreateEventScreenState extends State<CreateEventScreen> {
               const SizedBox(height: AppSpacing.lg),
               Text('Group', style: textTheme.bodyLarge),
               const SizedBox(height: AppSpacing.sm),
-              DropdownButtonFormField<String>(
-                value: _selectedGroup,
-                items: _demoGroups
-                    .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                    .toList(),
-                onChanged: (v) => setState(() => _selectedGroup = v),
+              StreamBuilder<List<GroupModel>>(
+                stream: groupsVm.listenGroups(),
+                builder: (context, snapshot) {
+                  final groups = snapshot.data ?? const <GroupModel>[];
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const LinearProgressIndicator();
+                  }
+                  if (groups.isEmpty) {
+                    return Text(
+                      'Join or create a group first to schedule an event.',
+                      style: textTheme.bodySmall,
+                    );
+                  }
+                  _selectedGroupId ??= widget.preselectedGroupId ?? groups.first.id;
+                  if (!groups.any((g) => g.id == _selectedGroupId)) {
+                    _selectedGroupId = groups.first.id;
+                  }
+                  return DropdownButtonFormField<String>(
+                    value: _selectedGroupId,
+                    items: groups
+                        .map((g) => DropdownMenuItem(value: g.id, child: Text(g.name)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedGroupId = v),
+                  );
+                },
               ),
               const Spacer(),
-              PrimaryButton(
-                label: 'Next',
-                onPressed: _selectedGroup != null
-                    ? () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => EventTimeSetupScreen(
-                              draft: EventDraft(groupName: _selectedGroup!, kind: _kind),
-                            ),
-                          ),
-                        )
-                    : null,
+              StreamBuilder<List<GroupModel>>(
+                stream: groupsVm.listenGroups(),
+                builder: (context, snapshot) {
+                  final groups = snapshot.data ?? const <GroupModel>[];
+                  final selected = groups.where((g) => g.id == _selectedGroupId).toList();
+                  return PrimaryButton(
+                    label: 'Next',
+                    onPressed: selected.isNotEmpty
+                        ? () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => EventTimeSetupScreen(
+                                  draft: EventDraft(
+                                    groupId: selected.first.id,
+                                    groupName: selected.first.name,
+                                    kind: _kind,
+                                  ),
+                                ),
+                              ),
+                            )
+                        : null,
+                  );
+                },
               ),
             ],
           ),

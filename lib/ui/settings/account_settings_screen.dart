@@ -1,16 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/list_row.dart';
+import '../../widgets/feedback/app_toast.dart';
 import '../../widgets/inputs/app_text_field.dart';
 import 'change_password_screen.dart';
 
 /// Account Settings screen (product doc 5.10.1). Editable Name/Email/
 /// Phone, a link into Change Password, and Save.
 ///
-/// TODO: load initial values from + persist to a UserViewModel.
+/// Live data: initial values from [AuthViewModel.currentUser]; Save calls
+/// [AuthViewModel.updateProfile]. Email is read-only here — changing it
+/// needs Firebase Auth re-authentication, a separate flow not built yet.
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
 
@@ -19,9 +24,18 @@ class AccountSettingsScreen extends StatefulWidget {
 }
 
 class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
-  final _nameController = TextEditingController(text: 'Alex Rivera');
-  final _emailController = TextEditingController(text: 'alex.rivera@example.com');
+  late final TextEditingController _nameController;
+  late final TextEditingController _emailController;
   final _phoneController = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final user = context.read<AuthViewModel>().currentUser;
+    _nameController = TextEditingController(text: user?.displayName ?? '');
+    _emailController = TextEditingController(text: user?.email ?? '');
+  }
 
   @override
   void dispose() {
@@ -31,10 +45,24 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     super.dispose();
   }
 
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final ok = await context.read<AuthViewModel>().updateProfile(
+          name: _nameController.text,
+          phone: _phoneController.text,
+        );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    if (!ok) {
+      AppToast.show(context, 'Could not save changes. Please try again.');
+      return;
+    }
+    AppToast.show(context, 'Account updated', type: AppToastType.success);
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Account')),
@@ -48,6 +76,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
               label: 'Email',
               controller: _emailController,
               keyboardType: TextInputType.emailAddress,
+              enabled: false,
             ),
             const SizedBox(height: AppSpacing.md),
             AppTextField(
@@ -66,11 +95,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
             ),
             const SizedBox(height: AppSpacing.xl),
             PrimaryButton(
-              label: 'Save Changes',
-              onPressed: () {
-                // TODO: persist via UserViewModel, then AppToast.show(...)
-                Navigator.of(context).pop();
-              },
+              label: _saving ? 'Saving…' : 'Save Changes',
+              onPressed: _saving ? null : _save,
             ),
           ],
         ),

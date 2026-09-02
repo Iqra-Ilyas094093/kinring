@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
@@ -19,11 +20,14 @@ class AuthViewModel extends ChangeNotifier {
   AuthViewModel({
     FirebaseAuth? firebaseAuth,
     GoogleAuthService? googleAuthService,
+    FirebaseFirestore? firestore,
   })  : _auth = firebaseAuth ?? FirebaseAuth.instance,
-        _googleAuthService = googleAuthService ?? GoogleAuthService();
+        _googleAuthService = googleAuthService ?? GoogleAuthService(),
+        _db = firestore ?? FirebaseFirestore.instance;
 
   final FirebaseAuth _auth;
   final GoogleAuthService _googleAuthService;
+  final FirebaseFirestore _db;
 
   AuthFlowStatus _status = AuthFlowStatus.idle;
   AuthFlowStatus get status => _status;
@@ -149,6 +153,29 @@ class AuthViewModel extends ChangeNotifier {
 
   Future<void> resendVerificationEmail() async {
     await _auth.currentUser?.sendEmailVerification();
+  }
+
+  /// Updates the display name on the Firebase Auth user and mirrors
+  /// name/phone onto `users/{uid}` (merge — doesn't clobber fields
+  /// [GroupsViewModel] writes there, like `fcmTokens`). Used by
+  /// [AccountSettingsScreen]'s Save button. Email changes need
+  /// re-authentication in Firebase Auth and are out of scope for this
+  /// screen's MVP form (the field is display-only until that flow
+  /// exists).
+  Future<bool> updateProfile({required String name, String? phone}) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      await user.updateDisplayName(name.trim());
+      await _db.collection('users').doc(user.uid).set({
+        'name': name.trim(),
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+      }, SetOptions(merge: true));
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Reloads the current user from Firebase and reports whether their
