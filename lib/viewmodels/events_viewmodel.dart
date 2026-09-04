@@ -131,6 +131,40 @@ class EventsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Phase 7 (amended) — lightweight event doc for an ad-hoc "Ring Now"
+  /// broadcast. No local `AlarmScheduler` call (unlike [createEvent]) —
+  /// the broadcast is instant, not something to arm the device for
+  /// later — but it DOES get a real Firestore doc, so the same
+  /// `statuses` subcollection (Phase 8) and Event History (Phase 10)
+  /// work for it exactly like a scheduled event. Previously Ring Now
+  /// had no backing doc at all, so [EventStatusViewModel.markCleared]
+  /// silently no-opped and Live Status stayed "Pending" forever.
+  Future<String?> createBroadcastEvent({
+    required String groupId,
+    required List<String> memberIds,
+  }) async {
+    try {
+      final ref = _db.collection('groups').doc(groupId).collection('events').doc();
+      await ref.set({
+        'type': 'alarm',
+        'title': 'Ring Now Broadcast',
+        'timeUTC': Timestamp.now(),
+        'repeatRule': 'once',
+        'customDays': <String>[],
+        'snoozeEnabled': false,
+        'confirmationPhrase': '',
+        'useSimpleTap': true,
+        'memberIds': memberIds,
+        'createdBy': _uid,
+      });
+      return ref.id;
+    } catch (e) {
+      _errorMessage = 'Could not start broadcast. Please try again.';
+      notifyListeners();
+      return null;
+    }
+  }
+
   Future<bool> editEvent(EventDraft draft) async {
     final eventId = draft.eventId;
     if (eventId == null) {

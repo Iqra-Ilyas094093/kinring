@@ -12,6 +12,7 @@ import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/list_row.dart';
+import '../../widgets/common/live_events_stream_builder.dart';
 import '../../widgets/common/section_header.dart';
 import '../events/upcoming_event_detail_screen.dart';
 import '../status/admin_panel_screen.dart';
@@ -96,8 +97,8 @@ class GroupDetailsScreen extends StatelessWidget {
                 const SizedBox(height: AppSpacing.lg),
                 SectionHeader(title: 'Upcoming Events'),
                 const SizedBox(height: AppSpacing.sm),
-                StreamBuilder<List<GroupEventModel>>(
-                  stream: eventsVm.listenGroupEvents(groupId),
+                LiveEventsStreamBuilder(
+                  streamBuilder: () => eventsVm.listenGroupEvents(groupId),
                   builder: (context, eventSnap) {
                     if (eventSnap.hasError) {
                       return Text('Could not load events: ${eventSnap.error}', style: textTheme.bodySmall?.copyWith(color: AppColors.error));

@@ -13,6 +13,7 @@ import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/list_row.dart';
+import '../../widgets/common/live_events_stream_builder.dart';
 import '../../widgets/common/section_header.dart';
 import '../../widgets/feedback/app_toast.dart';
 import '../groups/group_settings_screen.dart';
@@ -36,23 +37,38 @@ class AdminPanelScreen extends StatelessWidget {
   final String groupId;
   final String groupName;
 
-  Future<void> _ringNow(BuildContext context, int memberCount) async {
+  Future<void> _ringNow(BuildContext context, List<String> memberIds) async {
     final confirmed = await ConfirmationDialog.show(
       context,
       title: 'Ring Now',
-      message: 'This will instantly alert all $memberCount members. Continue?',
+      message: 'This will instantly alert all ${memberIds.length} members. Continue?',
       confirmLabel: 'Ring Now',
       isDestructive: true,
     );
     if (!confirmed || !context.mounted) return;
 
+    final eventsVm = context.read<EventsViewModel>();
+    // Phase 8 fix: a real event doc so this broadcast gets the same
+    // statuses tracking a scheduled event does — previously Ring Now
+    // had no backing doc, so markCleared always no-opped and Live
+    // Status showed everyone "Pending" forever, even after clearing.
+    final eventId = await eventsVm.createBroadcastEvent(groupId: groupId, memberIds: memberIds);
+
+    if (!context.mounted) return;
     EventTrigger.fire(
       context,
-      EventDraft(groupId: groupId, groupName: groupName, title: 'Ring Now Broadcast', kind: EventKind.alarm),
+      EventDraft(
+        groupId: groupId,
+        groupName: groupName,
+        eventId: eventId,
+        title: 'Ring Now Broadcast',
+        kind: EventKind.alarm,
+        snoozeEnabled: false,
+      ),
     );
 
     try {
-      await RingNowService.ringNow(groupId);
+      await RingNowService.ringNow(groupId, eventId: eventId);
     } catch (e) {
       if (context.mounted) {
         AppToast.show(context, 'Could not reach other members: $e', type: AppToastType.error);
@@ -73,14 +89,14 @@ class AdminPanelScreen extends StatelessWidget {
         child: StreamBuilder<GroupModel?>(
           stream: groupsVm.listenGroup(groupId),
           builder: (context, groupSnap) {
-            final memberCount = groupSnap.data?.memberCount ?? 0;
+            final memberIds = groupSnap.data?.memberIds ?? const <String>[];
             return ListView(
               padding: const EdgeInsets.all(AppSpacing.lg),
               children: [
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
-                    onPressed: () => _ringNow(context, memberCount),
+                    onPressed: memberIds.isEmpty ? null : () => _ringNow(context, memberIds),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,
                       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
@@ -111,8 +127,8 @@ class AdminPanelScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                StreamBuilder<List<GroupEventModel>>(
-                  stream: eventsVm.listenGroupEvents(groupId),
+                LiveEventsStreamBuilder(
+                  streamBuilder: () => eventsVm.listenGroupEvents(groupId),
                   builder: (context, eventSnap) {
                     if (eventSnap.hasError) {
                       return Text('Could not load events: ${eventSnap.error}', style: textTheme.bodySmall?.copyWith(color: AppColors.error));

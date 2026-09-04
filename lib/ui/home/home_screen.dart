@@ -11,6 +11,7 @@ import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/group_card.dart';
+import '../../widgets/common/live_events_stream_builder.dart';
 import '../../widgets/common/section_header.dart';
 import '../events/create_event_screen.dart';
 import '../events/upcoming_event_detail_screen.dart';
@@ -59,8 +60,8 @@ class HomeScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
-            StreamBuilder<List<GroupEventModel>>(
-              stream: eventsVm.listenUpcomingEvents(),
+            LiveEventsStreamBuilder(
+              streamBuilder: eventsVm.listenUpcomingEvents,
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
                   return Padding(
