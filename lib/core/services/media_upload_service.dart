@@ -1,51 +1,40 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:http/http.dart' as http;
 
 import '../constants/backend_config.dart';
 
-/// Phase 9 — uploads a picked image to the `kinring-media-worker` R2
-/// bucket and returns the worker-served URL to save on the Firestore
-/// doc's `photoUrl` field (`users/{uid}` or `groups/{groupId}`). Firebase's
-/// free Spark plan has no Cloud Storage, so this Worker + R2 stands in
-/// for it (product doc Part 11 Phase 9).
+/// Phase 9 (amended) — uploads a picked image directly to Cloudinary via
+/// its unsigned upload API, and returns the `secure_url` to save on the
+/// Firestore doc's `photoUrl` field (`users/{uid}` or `groups/{groupId}`).
+///
+/// No Cloudflare Worker in this path anymore: an unsigned upload preset
+/// (Cloudinary dashboard → Settings → Upload) lets the app POST straight
+/// from the device with just the cloud name + preset name, no secret key
+/// on the client and no server round-trip to broker the upload. This
+/// replaces the earlier `kinring-media-worker` (R2) design — that
+/// worker's `wrangler.toml`/`index.js` can be deleted, nothing calls it
+/// anymore.
 class MediaUploadService {
   MediaUploadService._();
 
-  static String _contentTypeFor(String path) {
-    switch (path.split('.').last.toLowerCase()) {
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'image/jpeg';
-    }
-  }
-
   static Future<String> uploadImage(File file) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw StateError('MediaUploadService.uploadImage called with no signed-in user.');
-    }
-    final idToken = await user.getIdToken();
-    final bytes = await file.readAsBytes();
-
-    final res = await http.post(
-      Uri.parse('${BackendConfig.mediaWorkerUrl}/upload'),
-      headers: {
-        'Authorization': 'Bearer $idToken',
-        'Content-Type': _contentTypeFor(file.path),
-      },
-      body: bytes,
+    final uri = Uri.parse(
+      'https://api.cloudinary.com/v1_1/${BackendConfig.cloudinaryCloudName}/image/upload',
     );
+
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = BackendConfig.cloudinaryUploadPreset
+      ..files.add(await http.MultipartFile.fromPath('file', file.path));
+
+    final streamed = await request.send();
+    final res = await http.Response.fromStream(streamed);
 
     if (res.statusCode != 200) {
       throw Exception('Upload failed (${res.statusCode}): ${res.body}');
     }
     final body = jsonDecode(res.body) as Map<String, dynamic>;
-    return body['url'] as String;
+    return body['secure_url'] as String;
   }
 }

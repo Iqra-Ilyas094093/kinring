@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../viewmodels/event_status_viewmodel.dart';
 import '../../widgets/common/reminder_notification_card.dart';
 import 'task_cleared_confirmation_screen.dart';
 import 'type_confirm_task_screen.dart';
@@ -33,6 +34,12 @@ class ReminderNotificationCardScreen extends StatelessWidget {
   }
 
   void _gotIt(BuildContext context) {
+    // Phase 8 fix: this shortcut (useSimpleTap reminders) used to skip
+    // straight to the confirmation screen without ever writing the
+    // status doc — Live Status stayed "Pending" forever because nothing
+    // told it otherwise. Same fire-and-forget write as the other two
+    // task screens.
+    EventStatusViewModel().markCleared(groupId: draft.groupId, eventId: draft.eventId);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TaskClearedConfirmationScreen(draft: draft, startedAt: startedAt),
