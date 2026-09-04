@@ -4,7 +4,9 @@ import 'package:flutter/foundation.dart';
 
 import '../core/services/fcm_service.dart';
 import '../core/services/google_auth_service.dart';
+import '../core/services/notify_service.dart';
 import '../models/auth_flow_status.dart';
+import '../models/notification_item.dart';
 
 /// Single source of truth for authentication.
 ///
@@ -171,6 +173,7 @@ class AuthViewModel extends ChangeNotifier {
         'name': name.trim(),
         if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
       }, SetOptions(merge: true));
+      await _syncMemberDocsAndNotify(displayName: name.trim());
       notifyListeners();
       return true;
     } catch (_) {
@@ -189,10 +192,42 @@ class AuthViewModel extends ChangeNotifier {
     try {
       await user.updatePhotoURL(photoUrl);
       await _db.collection('users').doc(user.uid).set({'photoUrl': photoUrl}, SetOptions(merge: true));
+      await _syncMemberDocsAndNotify(photoUrl: photoUrl);
       notifyListeners();
       return true;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Every group member doc (`groups/{groupId}/members/{uid}`) carries
+  /// its OWN denormalized `displayName`/`photoUrl` — copied at join
+  /// time (see [GroupsViewModel.joinGroup]) so member lists render off
+  /// one subcollection stream instead of a per-member `users/{uid}`
+  /// read. That means [updateProfile]/[updatePhoto] updating `users/{uid}`
+  /// alone was never actually visible to any group — this keeps every
+  /// membership doc in sync too, then tells each group about it (skipped
+  /// for a name/photo that's empty, since callers only pass what changed).
+  Future<void> _syncMemberDocsAndNotify({String? displayName, String? photoUrl}) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final groupsSnap = await _db.collection('groups').where('memberIds', arrayContains: uid).get();
+
+    final batch = _db.batch();
+    for (final doc in groupsSnap.docs) {
+      batch.update(doc.reference.collection('members').doc(uid), {
+        if (displayName != null) 'displayName': displayName,
+        if (photoUrl != null) 'photoUrl': photoUrl,
+      });
+    }
+    await batch.commit();
+
+    for (final doc in groupsSnap.docs) {
+      NotifyService.notify(
+        groupId: doc.id,
+        kind: NotificationKind.profileUpdated.name,
+        title: '${displayName ?? 'A member'} updated their profile',
+      );
     }
   }
 

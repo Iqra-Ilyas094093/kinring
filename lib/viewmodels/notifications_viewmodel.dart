@@ -7,9 +7,10 @@ import '../models/notification_item.dart';
 /// Backs [NotificationsScreen] (doc 5.5.4) — same "single source of
 /// truth, provided once at app root" shape as [GroupsViewModel] and
 /// [EventsViewModel]. The docs themselves under `notifications/{uid}/items`
-/// are written server-side (cron worker / Ring Now endpoint / group
-/// activity triggers, Part 11 Phase 6-7, not built yet); this ViewModel
-/// only reads.
+/// are written server-side by the `kinring-notify` Worker (member
+/// joined/event created/profile updated — see [NotifyService]) using its
+/// elevated service-account access, since Firestore rules only let a
+/// user write their own feed directly. This ViewModel only reads.
 class NotificationsViewModel extends ChangeNotifier {
   NotificationsViewModel({FirebaseFirestore? firestore, FirebaseAuth? auth})
       : _db = firestore ?? FirebaseFirestore.instance,

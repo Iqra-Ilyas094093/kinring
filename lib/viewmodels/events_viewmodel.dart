@@ -4,8 +4,11 @@ import 'package:flutter/foundation.dart';
 
 import '../core/services/alarm_permissions_service.dart';
 import '../core/services/alarm_scheduler.dart';
+import '../core/services/notify_service.dart';
 import '../models/event_draft.dart';
 import '../models/group_event_model.dart';
+import '../models/notification_item.dart';
+import '../widgets/common/event_card.dart';
 
 /// Phase 3 — Event CRUD, backed by Firestore. Phase 4 hooks in here too:
 /// every successful create/edit (re)schedules the device-local exact
@@ -122,6 +125,12 @@ class EventsViewModel extends ChangeNotifier {
       } catch (e) {
         debugPrint('AlarmScheduler.scheduleForEvent failed: $e');
       }
+
+      NotifyService.notify(
+        groupId: draft.groupId,
+        kind: NotificationKind.eventCreated.name,
+        title: 'New ${draft.kind.name}: ${draft.title.isEmpty ? (draft.kind == EventKind.alarm ? 'Alarm' : 'Reminder') : draft.title}',
+      );
 
       return ref.id;
     } catch (e) {

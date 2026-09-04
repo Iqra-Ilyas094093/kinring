@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Matches the "kinds" already used by NotificationsScreen's demo list:
-/// cleared, snoozed, ring-now, reminder confirmed, group activity.
-enum NotificationKind { cleared, snoozed, ringNow, reminderConfirmed, groupActivity }
+/// cleared, snoozed, ring-now, reminder confirmed, group activity — plus
+/// eventCreated/profileUpdated for the notification fan-out worker
+/// (kinring-notify).
+enum NotificationKind { cleared, snoozed, ringNow, reminderConfirmed, groupActivity, eventCreated, profileUpdated }
 
 NotificationKind _kindFromString(String? v) => NotificationKind.values.firstWhere(
       (e) => e.name == v,

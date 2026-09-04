@@ -25,6 +25,8 @@ class NotificationsScreen extends StatelessWidget {
         NotificationKind.ringNow => (icon: Icons.campaign_rounded, color: AppColors.error),
         NotificationKind.reminderConfirmed => (icon: Icons.notifications_rounded, color: AppColors.secondary),
         NotificationKind.groupActivity => (icon: Icons.groups_rounded, color: AppColors.primary),
+        NotificationKind.eventCreated => (icon: Icons.alarm_add_rounded, color: AppColors.secondary),
+        NotificationKind.profileUpdated => (icon: Icons.person_rounded, color: AppColors.primary),
       };
 
   String _relativeTime(DateTime ts) {

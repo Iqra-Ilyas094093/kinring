@@ -4,7 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../core/services/notify_service.dart';
 import '../models/group_model.dart';
+import '../models/notification_item.dart';
 
 /// Single source of truth for group data — mirrors how [AuthViewModel]
 /// owns auth. Provided once at the app root; screens never talk to
@@ -100,6 +102,20 @@ class GroupsViewModel extends ChangeNotifier {
         ).toMap(),
       );
       await batch.commit();
+
+      // A group of one has nobody else to notify — this is a self-record
+      // only, written directly (rules allow a user to write their own
+      // notifications feed, no worker needed since there's no fan-out).
+      await _db.collection('notifications').doc(uid).collection('items').add(
+            NotificationItem(
+              id: '',
+              kind: NotificationKind.groupActivity,
+              title: 'You created ${group.name}',
+              groupId: group.id,
+              ts: DateTime.now(),
+            ).toMap(),
+          );
+
       return group;
     } catch (e) {
       _errorMessage = 'Could not create group. Please try again.';
@@ -149,6 +165,16 @@ class GroupsViewModel extends ChangeNotifier {
         'memberIds': FieldValue.arrayUnion([uid]),
       });
       await batch.commit();
+
+      // Phase 8 fix (notifications): tell the rest of the group someone
+      // joined. Fire-and-forget — join already succeeded, a failed
+      // courtesy ping shouldn't block returning the group to the caller.
+      NotifyService.notify(
+        groupId: group.id,
+        kind: NotificationKind.groupActivity.name,
+        title: '${user?.displayName ?? 'A new member'} joined ${group.name}',
+      );
+
       return group;
     } catch (e) {
       _errorMessage = 'Could not join group. Please try again.';

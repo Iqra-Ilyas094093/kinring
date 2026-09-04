@@ -9,11 +9,10 @@ import '../../widgets/common/toggle_row.dart';
 /// pattern-mode toggle with a before/after preview of the Color Match
 /// task's swatches, so users can see the effect before turning it on.
 ///
-/// Phase 10: persisted to `shared_preferences`. Still not threaded
-/// through to the Color Match Task Screen itself (5.8.2) — that screen
-/// would need to read this same key and render [Icons] over each
-/// swatch; left as a follow-up, this pass only makes the toggle
-/// durable.
+/// Phase 10: persisted to `shared_preferences` AND threaded through to
+/// the Color Match Task Screen (5.8.2) — that screen reads the same
+/// `a11y_colorblind_mode` key on init and renders a fixed glyph over
+/// each swatch when it's on.
 class AccessibilitySettingsScreen extends StatefulWidget {
   const AccessibilitySettingsScreen({super.key});
 

@@ -25,9 +25,13 @@ import 'local_notifications_service.dart';
 ///     - 'alarm' covers both the cron backup trigger AND admin "Ring
 ///       Now" (Ring Now is just an admin-broadcast alarm — same UI).
 ///     - 'reminder': push-only by design (doc 5.8.4), never full-screen.
-///     - 'activity': cleared/snoozed/joined etc. — the Firestore doc
-///       under notifications/{uid}/items is already written server-side;
-///       this is just the live nudge. No `draft` key for this type.
+///     - 'activity': cleared/snoozed/joined/event-created/profile-updated
+///       etc, sent by the `kinring-notify` Worker. The Firestore doc
+///       under notifications/{uid}/items is already written server-side
+///       (with elevated access, since a client can only write its own);
+///       this push is just the live nudge — `kind`/`title`/`groupId`
+///       come through as flat string fields (see fcm.js `extra`), no
+///       `draft` key for this type.
 ///   - `draft`: jsonEncode(EventDraft.toJson()) — required for
 ///     alarm/reminder, matches [AlarmScheduler]'s local payload shape
 ///     exactly so both paths converge on the same [EventTrigger.fire].
@@ -109,10 +113,15 @@ class FcmService {
   static Future<void> _handleForegroundMessage(RemoteMessage message) async {
     final type = message.data['type'];
     if (type == 'activity') {
-      // Notifications screen is already listening to Firestore live —
-      // nothing to push into the UI here besides the doc that's already
-      // written. Deliberately silent (no toast) to match the doc's
-      // "not separately specced" note on this screen.
+      // Firestore doc already written server-side by kinring-notify —
+      // NotificationsScreen's own live listener picks it up on its own.
+      // This is just the heads-up nudge for whichever screen is open
+      // right now.
+      await LocalNotificationsService.showActivityNotification(
+        id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+        title: message.data['title'] ?? 'Group activity',
+        groupId: message.data['groupId'] ?? '',
+      );
       return;
     }
 
@@ -151,9 +160,13 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   final draftJson = message.data['draft'] as String?;
 
   if (type == 'activity') {
-    // Firestore doc already written server-side; a quiet heads-up here
-    // would need its own non-alarm channel — deferred, not required by
-    // Phase 5's checklist (doc Part 11).
+    // Firestore doc already written server-side by kinring-notify — this
+    // is the background heads-up nudge only.
+    await LocalNotificationsService.showActivityNotification(
+      id: DateTime.now().millisecondsSinceEpoch & 0x7fffffff,
+      title: message.data['title'] ?? 'Group activity',
+      groupId: message.data['groupId'] ?? '',
+    );
     return;
   }
   if (draftJson == null) return;

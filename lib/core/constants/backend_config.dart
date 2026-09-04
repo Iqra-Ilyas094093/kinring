@@ -14,6 +14,11 @@ class BackendConfig {
   /// Phase 7 — kinring-ringnow worker.
   static const String ringNowUrl = 'https://kinring-ringnow.iqrailyas093.workers.dev';
 
+  /// Notifications — kinring-notify worker (generic activity fan-out:
+  /// member joined, event created, profile updated). Fill in after its
+  /// own `wrangler deploy`.
+  static const String notifyUrl = 'https://kinring-notify.YOUR-SUBDOMAIN.workers.dev';
+
   /// Phase 9 — Cloudinary, cloud name from dashboard home page.
   static const String cloudinaryCloudName = 'hfkht08v';
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -22,6 +23,18 @@ const _palette = <Color>[
   AppColors.warning,
   AppColors.error,
   AppColors.accentGold,
+];
+
+/// One fixed glyph per palette color, same order — Accessibility
+/// Settings' "Colorblind pattern mode" (Phase 10) renders these over
+/// each swatch instead of relying on hue alone.
+const _patternIcons = <IconData>[
+  Icons.circle,
+  Icons.square_rounded,
+  Icons.change_history_rounded,
+  Icons.star_rounded,
+  Icons.diamond_rounded,
+  Icons.close_rounded,
 ];
 
 /// Color Match Task Screen (product doc 5.8.2). Verified entirely
@@ -57,6 +70,10 @@ class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
   _Phase _phase = _Phase.preview;
   Timer? _previewTimer;
   late List<Color> _answerGrid = _shuffledPalette();
+  bool _colorblindMode = false;
+
+  IconData? _patternFor(Color color) =>
+      _colorblindMode ? _patternIcons[_palette.indexOf(color)] : null;
 
   List<Color> _shuffledPalette() => List<Color>.from(_palette)..shuffle(_random);
 
@@ -67,6 +84,13 @@ class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
   void initState() {
     super.initState();
     _startPreview();
+    _loadColorblindMode();
+  }
+
+  Future<void> _loadColorblindMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _colorblindMode = prefs.getBool('a11y_colorblind_mode') ?? false);
   }
 
   @override
@@ -156,6 +180,7 @@ class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
                             color: _sequence[_previewIndex],
                             active: true,
                             size: 84,
+                            patternIcon: _patternFor(_sequence[_previewIndex]),
                           )
                         : const SizedBox(width: 84, height: 84),
                   ),
@@ -170,7 +195,11 @@ class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
                     alignment: WrapAlignment.center,
                     children: [
                       for (final color in _answerGrid)
-                        ColorSwatchButton(color: color, onTap: () => _handleSwatchTap(color)),
+                        ColorSwatchButton(
+                          color: color,
+                          onTap: () => _handleSwatchTap(color),
+                          patternIcon: _patternFor(color),
+                        ),
                     ],
                   )
                 else
