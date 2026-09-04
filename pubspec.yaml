@@ -75,6 +75,20 @@ dependencies:
   # create per doc Phase 4 step 5, not as an upfront onboarding flow.
   permission_handler: ^11.3.1
 
+  # Phase 7/9 — plain HTTP client for calling the kinring-ringnow and
+  # kinring-media-worker Cloudflare Workers directly (no Firebase SDK
+  # wraps these, they're custom HTTP endpoints).
+  http: ^1.2.2
+
+  # Phase 9 — picks a profile/group photo from the gallery before
+  # MediaUploadService uploads it to the R2 media worker.
+  image_picker: ^1.1.2
+
+  # Phase 10 — local-only persistence for Notification/Accessibility
+  # Settings toggles (doc explicitly calls these device-only, no cloud
+  # sync needed).
+  shared_preferences: ^2.3.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

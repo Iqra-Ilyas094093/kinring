@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../viewmodels/event_status_viewmodel.dart';
 import '../../widgets/common/color_swatch_button.dart';
 import '../../widgets/common/progress_dots.dart';
 import '../../widgets/feedback/app_toast.dart';
@@ -103,6 +104,10 @@ class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
     if (color == _sequence[_inputProgress]) {
       setState(() => _inputProgress++);
       if (_inputProgress == _sequence.length) {
+        // Phase 8: fire-and-forget — the write shouldn't block the
+        // confirmation animation, and a transient failure here isn't
+        // worth blocking the user's device from unlocking over.
+        EventStatusViewModel().markCleared(groupId: widget.draft.groupId, eventId: widget.draft.eventId);
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => TaskClearedConfirmationScreen(

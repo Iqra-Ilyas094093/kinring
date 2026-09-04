@@ -161,6 +161,12 @@ class GroupsViewModel extends ChangeNotifier {
     await _db.collection('groups').doc(groupId).update({'name': newName.trim()});
   }
 
+  /// Phase 9 — group photo. Called after [MediaUploadService.uploadImage]
+  /// returns the new photo's URL.
+  Future<void> updateGroupPhoto(String groupId, String photoUrl) async {
+    await _db.collection('groups').doc(groupId).update({'photoUrl': photoUrl});
+  }
+
   Future<void> promoteMember(String groupId, String memberUid) async {
     await _db
         .collection('groups')

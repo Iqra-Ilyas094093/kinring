@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/media_upload_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
+import '../../widgets/common/app_avatar.dart';
 import '../../widgets/common/list_row.dart';
 import '../../widgets/feedback/app_toast.dart';
 import '../../widgets/inputs/app_text_field.dart';
@@ -16,6 +21,9 @@ import 'change_password_screen.dart';
 /// Live data: initial values from [AuthViewModel.currentUser]; Save calls
 /// [AuthViewModel.updateProfile]. Email is read-only here — changing it
 /// needs Firebase Auth re-authentication, a separate flow not built yet.
+/// Photo (Phase 9): uploads through [MediaUploadService] then
+/// [AuthViewModel.updatePhoto] — saves immediately on pick, independent
+/// of the Save button below (matches Group Settings' photo behavior).
 class AccountSettingsScreen extends StatefulWidget {
   const AccountSettingsScreen({super.key});
 
@@ -28,6 +36,8 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
   late final TextEditingController _emailController;
   final _phoneController = TextEditingController();
   bool _saving = false;
+  bool _uploadingPhoto = false;
+  String? _photoUrl;
 
   @override
   void initState() {
@@ -35,6 +45,7 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     final user = context.read<AuthViewModel>().currentUser;
     _nameController = TextEditingController(text: user?.displayName ?? '');
     _emailController = TextEditingController(text: user?.email ?? '');
+    _photoUrl = user?.photoURL;
   }
 
   @override
@@ -43,6 +54,26 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickPhoto() async {
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (picked == null || !mounted) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      final url = await MediaUploadService.uploadImage(File(picked.path));
+      final ok = await context.read<AuthViewModel>().updatePhoto(url);
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _photoUrl = url);
+      } else {
+        AppToast.show(context, 'Could not save photo. Please try again.', type: AppToastType.error);
+      }
+    } catch (e) {
+      if (mounted) AppToast.show(context, 'Could not upload photo: $e', type: AppToastType.error);
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
   }
 
   Future<void> _save() async {
@@ -70,6 +101,35 @@ class _AccountSettingsScreenState extends State<AccountSettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.all(AppSpacing.lg),
           children: [
+            Center(
+              child: GestureDetector(
+                onTap: _uploadingPhoto ? null : _pickPhoto,
+                child: Stack(
+                  children: [
+                    _uploadingPhoto
+                        ? const SizedBox(
+                            width: 88,
+                            height: 88,
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : AppAvatar(name: _nameController.text, imageUrl: _photoUrl, size: 88),
+                    Positioned(
+                      right: 0,
+                      bottom: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primary,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.camera_alt, size: 16, color: AppColors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             AppTextField(label: 'Name', controller: _nameController),
             const SizedBox(height: AppSpacing.md),
             AppTextField(

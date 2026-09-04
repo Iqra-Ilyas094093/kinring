@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -8,8 +9,11 @@ import '../../widgets/common/toggle_row.dart';
 /// pattern-mode toggle with a before/after preview of the Color Match
 /// task's swatches, so users can see the effect before turning it on.
 ///
-/// TODO: persist to AccessibilityPreferences and thread through to the
-/// Color Match Task Screen (5.8.2) once that screen is built.
+/// Phase 10: persisted to `shared_preferences`. Still not threaded
+/// through to the Color Match Task Screen itself (5.8.2) — that screen
+/// would need to read this same key and render [Icons] over each
+/// swatch; left as a follow-up, this pass only makes the toggle
+/// durable.
 class AccessibilitySettingsScreen extends StatefulWidget {
   const AccessibilitySettingsScreen({super.key});
 
@@ -18,7 +22,30 @@ class AccessibilitySettingsScreen extends StatefulWidget {
 }
 
 class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScreen> {
+  static const _kColorblindMode = 'a11y_colorblind_mode';
+
+  bool _loaded = false;
   bool _colorblindMode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _colorblindMode = prefs.getBool(_kColorblindMode) ?? false;
+      _loaded = true;
+    });
+  }
+
+  Future<void> _setColorblindMode(bool value) async {
+    setState(() => _colorblindMode = value);
+    (await SharedPreferences.getInstance()).setBool(_kColorblindMode, value);
+  }
 
   static const _swatchColors = [
     AppColors.primary,
@@ -57,6 +84,13 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
+    if (!_loaded) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(title: const Text('Accessibility')),
@@ -68,7 +102,7 @@ class _AccessibilitySettingsScreenState extends State<AccessibilitySettingsScree
               label: 'Colorblind pattern mode',
               subtitle: 'Adds a shape to each color in the Color Match task',
               value: _colorblindMode,
-              onChanged: (v) => setState(() => _colorblindMode = v),
+              onChanged: _setColorblindMode,
             ),
             const SizedBox(height: AppSpacing.lg),
             Text('Preview', style: textTheme.headlineSmall),

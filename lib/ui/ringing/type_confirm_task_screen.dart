@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../viewmodels/event_status_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/inputs/app_text_field.dart';
 import 'task_cleared_confirmation_screen.dart';
@@ -34,6 +35,8 @@ class _TypeConfirmTaskScreenState extends State<TypeConfirmTaskScreen> {
       _input.trim().toLowerCase() == widget.draft.confirmationPhrase.trim().toLowerCase();
 
   void _confirm() {
+    // Phase 8: fire-and-forget, see ColorMatchTaskScreen for why.
+    EventStatusViewModel().markCleared(groupId: widget.draft.groupId, eventId: widget.draft.eventId);
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TaskClearedConfirmationScreen(

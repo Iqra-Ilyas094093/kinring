@@ -59,6 +59,29 @@ class EventsViewModel extends ChangeNotifier {
         .map((qs) => qs.docs.map((d) => GroupEventModel.fromDoc(d, groupId)).toList());
   }
 
+  /// Phase 10 — Event History. Everything in `groups/{id}/events` whose
+  /// `timeUTC` has already passed, most recent first. `once` events stay
+  /// in this collection forever once fired (only `cancelEvent` deletes
+  /// them) — the cron worker's `lastFiredAt` marks them done but doesn't
+  /// remove the doc, which is exactly what this needs to read them back.
+  /// Known gap: a repeating event's `timeUTC` gets advanced to its NEXT
+  /// occurrence as soon as the cron worker fires it, so it stops
+  /// matching "past" the moment it's fired — repeating events won't show
+  /// up here. Fixing that needs a separate per-occurrence log doc,
+  /// deliberately out of scope for this pass (see manual steps list).
+  Stream<List<GroupEventModel>> listenPastEvents(String groupId, {int limit = 30}) {
+    final now = Timestamp.now();
+    return _db
+        .collection('groups')
+        .doc(groupId)
+        .collection('events')
+        .where('timeUTC', isLessThan: now)
+        .orderBy('timeUTC', descending: true)
+        .limit(limit)
+        .snapshots()
+        .map((qs) => qs.docs.map((d) => GroupEventModel.fromDoc(d, groupId)).toList());
+  }
+
   Stream<GroupEventModel?> listenEvent(String groupId, String eventId) {
     return _db
         .collection('groups')

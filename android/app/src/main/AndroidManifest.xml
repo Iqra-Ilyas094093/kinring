@@ -1,4 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Phase 7/9: explicit for release builds too — debug/profile
+         manifests already carry this for the Flutter tool's own use,
+         but release only merges this file, and both RingNowService and
+         MediaUploadService need it to reach the Cloudflare Workers. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="kinring"
         android:name="${applicationName}"

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/services/event_trigger.dart';
+import '../../core/services/ring_now_service.dart';
 import '../../models/event_draft.dart';
 import '../../models/group_event_model.dart';
 import '../../models/group_model.dart';
@@ -13,6 +14,7 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/list_row.dart';
 import '../../widgets/common/section_header.dart';
+import '../../widgets/feedback/app_toast.dart';
 import '../groups/group_settings_screen.dart';
 import '../events/edit_event_screen.dart';
 import 'event_history_screen.dart';
@@ -22,9 +24,12 @@ import 'event_history_screen.dart';
 /// into Group Settings.
 ///
 /// Live data: [EventsViewModel.listenGroupEvents] for the events list.
-/// "Ring Now" still fires locally via [EventTrigger.fire] — the Cloudflare
-/// Worker HTTP broadcast (product doc Part 11 Phase 7) hasn't been built
-/// yet, so this is the correct stopping point until that phase lands.
+/// "Ring Now" (Phase 7): [RingNowService] POSTs to the Cloudflare Worker,
+/// which verifies admin membership server-side and pushes the broadcast
+/// to every member's device(s), bypassing silent/DND. The local
+/// [EventTrigger.fire] call alongside it is just for the tapping admin's
+/// own screen — instant feedback without waiting on the network
+/// round-trip; the push is what reaches everyone else.
 class AdminPanelScreen extends StatelessWidget {
   const AdminPanelScreen({super.key, required this.groupId, required this.groupName});
 
@@ -39,14 +44,19 @@ class AdminPanelScreen extends StatelessWidget {
       confirmLabel: 'Ring Now',
       isDestructive: true,
     );
-    if (confirmed && context.mounted) {
-      // TODO(Phase 7): POST to the Cloudflare Worker "Ring Now" endpoint
-      // (doc Part 4/11) — push-only broadcast, bypasses silent mode. This
-      // local fire is what that push ultimately triggers on each device.
-      EventTrigger.fire(
-        context,
-        EventDraft(groupId: groupId, groupName: groupName, title: 'Ring Now Broadcast', kind: EventKind.alarm),
-      );
+    if (!confirmed || !context.mounted) return;
+
+    EventTrigger.fire(
+      context,
+      EventDraft(groupId: groupId, groupName: groupName, title: 'Ring Now Broadcast', kind: EventKind.alarm),
+    );
+
+    try {
+      await RingNowService.ringNow(groupId);
+    } catch (e) {
+      if (context.mounted) {
+        AppToast.show(context, 'Could not reach other members: $e', type: AppToastType.error);
+      }
     }
   }
 

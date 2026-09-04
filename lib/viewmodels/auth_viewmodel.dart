@@ -178,6 +178,24 @@ class AuthViewModel extends ChangeNotifier {
     }
   }
 
+  /// Phase 9 — profile photo. Mirrors [updateProfile]'s shape: updates
+  /// the Firebase Auth user's `photoURL` and the `users/{uid}` doc so
+  /// [GroupsViewModel]'s denormalized member `photoUrl` picks it up next
+  /// time it's re-written (join/promote), and any screen reading
+  /// `currentUser.photoURL` directly stays in sync too.
+  Future<bool> updatePhoto(String photoUrl) async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    try {
+      await user.updatePhotoURL(photoUrl);
+      await _db.collection('users').doc(user.uid).set({'photoUrl': photoUrl}, SetOptions(merge: true));
+      notifyListeners();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Reloads the current user from Firebase and reports whether their
   /// email is now verified. Used by [EmailVerificationScreen] to poll.
   Future<bool> reloadAndCheckVerified() async {
