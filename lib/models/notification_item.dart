@@ -19,6 +19,7 @@ class NotificationItem {
     required this.title,
     required this.groupId,
     required this.ts,
+    this.read = false,
   });
 
   final String id;
@@ -26,6 +27,11 @@ class NotificationItem {
   final String title;
   final String groupId;
   final DateTime ts;
+
+  /// Read/unread — backs the Home tab's notification bell badge. Absent
+  /// on any doc written before this field existed, which `fromDoc`
+  /// treats as unread (`false`) rather than crashing on a missing key.
+  final bool read;
 
   factory NotificationItem.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? const {};
@@ -35,6 +41,7 @@ class NotificationItem {
       title: (d['title'] as String?) ?? '',
       groupId: (d['groupId'] as String?) ?? '',
       ts: (d['ts'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      read: (d['read'] as bool?) ?? false,
     );
   }
 
@@ -43,5 +50,6 @@ class NotificationItem {
         'title': title,
         'groupId': groupId,
         'ts': Timestamp.fromDate(ts),
+        'read': read,
       };
 }

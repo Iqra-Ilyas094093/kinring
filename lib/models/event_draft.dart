@@ -21,6 +21,7 @@ class EventDraft {
     this.snoozeEnabled = true,
     this.confirmationPhrase = '',
     this.useSimpleTap = true,
+    this.snoozeCount = 0,
   });
 
   /// `groups/{groupId}` this event belongs (or will belong) to. Defaults
@@ -43,6 +44,16 @@ class EventDraft {
   bool snoozeEnabled;
   String confirmationPhrase;
   bool useSimpleTap;
+
+  /// How many times THIS ring cycle has already been snoozed. Was
+  /// previously a screen-only constructor param on [AlarmRingingScreen],
+  /// which meant it reset to 0 every time a snooze re-fired the alarm
+  /// through `AlarmManager`/FCM (both cross an isolate/platform-channel
+  /// boundary and only ever reconstruct an `EventDraft` from THIS JSON,
+  /// with no way to also thread a separate int through). Living here
+  /// instead means a snooze's difficulty bump actually survives the
+  /// round trip.
+  int snoozeCount;
 
   String get repeatLabel => switch (repeatRule) {
         RepeatRule.once => 'Once',
@@ -72,6 +83,25 @@ class EventDraft {
       ? 'Color Match'
       : (useSimpleTap ? 'Tap to confirm' : '"$confirmationPhrase"');
 
+  /// Shallow copy with an overridden `snoozeCount` — used by
+  /// [AlarmRingingScreen._handleSnooze] to bump the count before
+  /// re-encoding the draft for the snooze's `AlarmManager` payload.
+  EventDraft withSnoozeCount(int newSnoozeCount) => EventDraft(
+        groupName: groupName,
+        groupId: groupId,
+        eventId: eventId,
+        kind: kind,
+        title: title,
+        date: date,
+        time: time,
+        repeatRule: repeatRule,
+        customDays: customDays,
+        snoozeEnabled: snoozeEnabled,
+        confirmationPhrase: confirmationPhrase,
+        useSimpleTap: useSimpleTap,
+        snoozeCount: newSnoozeCount,
+      );
+
   /// Minimal fields needed to redraw the Ringing/Task flow (doc 5.8)
   /// from a fired alarm — passed as the `AndroidAlarmManager` callback
   /// param and as the alarm notification payload, both of which cross
@@ -89,6 +119,7 @@ class EventDraft {
         'snoozeEnabled': snoozeEnabled,
         'confirmationPhrase': confirmationPhrase,
         'useSimpleTap': useSimpleTap,
+        'snoozeCount': snoozeCount,
       };
 
   factory EventDraft.fromJson(Map<String, dynamic> json) => EventDraft(
@@ -105,5 +136,6 @@ class EventDraft {
         snoozeEnabled: json['snoozeEnabled'] as bool? ?? true,
         confirmationPhrase: json['confirmationPhrase'] as String? ?? '',
         useSimpleTap: json['useSimpleTap'] as bool? ?? true,
+        snoozeCount: json['snoozeCount'] as int? ?? 0,
       );
 }

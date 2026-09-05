@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/services/alarm_scheduler.dart';
+import '../../core/services/local_notifications_service.dart';
 import '../../models/event_draft.dart';
 import '../../viewmodels/event_status_viewmodel.dart';
 import '../../widgets/common/reminder_notification_card.dart';
@@ -40,6 +42,9 @@ class ReminderNotificationCardScreen extends StatelessWidget {
     // told it otherwise. Same fire-and-forget write as the other two
     // task screens.
     EventStatusViewModel().markCleared(groupId: draft.groupId, eventId: draft.eventId);
+    if (draft.eventId != null) {
+      LocalNotificationsService.dismiss(AlarmScheduler.alarmIdFor(draft.eventId!));
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TaskClearedConfirmationScreen(draft: draft, startedAt: startedAt),

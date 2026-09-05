@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../constants/backend_config.dart';
@@ -32,7 +33,7 @@ class NotifyService {
     final idToken = await user.getIdToken();
 
     try {
-      await http.post(
+      final res = await http.post(
         Uri.parse(BackendConfig.notifyUrl),
         headers: {
           'Authorization': 'Bearer $idToken',
@@ -40,10 +41,20 @@ class NotifyService {
         },
         body: jsonEncode({'groupId': groupId, 'kind': kind, 'title': title, 'excludeSelf': excludeSelf}),
       );
-    } catch (_) {
+      if (res.statusCode != 200) {
+        debugPrint('NotifyService.notify failed (${res.statusCode}): ${res.body}');
+      }
+    } catch (e) {
       // Fire-and-forget by design (see call sites: join/create/update
       // flows already succeeded by the time this runs) — a failed
-      // courtesy notification shouldn't surface as an error to the user.
+      // courtesy notification shouldn't surface as an error to the
+      // user. But it should NOT be silent to a developer: this was
+      // completely swallowed before, which is exactly how "notifyUrl is
+      // still the placeholder, so every single call fails" went
+      // undiagnosed — printed here so `flutter run`'s console shows the
+      // real reason (e.g. a DNS failure on the placeholder host) instead
+      // of nothing at all.
+      debugPrint('NotifyService.notify error: $e');
     }
   }
 }

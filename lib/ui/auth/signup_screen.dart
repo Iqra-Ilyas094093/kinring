@@ -81,13 +81,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
-      appBar: AppBar(),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const SizedBox(height: AppSpacing.xxl),
               const AppLogo(variant: AppLogoVariant.monogram),
               const SizedBox(height: AppSpacing.lg),
               Text('Create your account', style: textTheme.headlineLarge),

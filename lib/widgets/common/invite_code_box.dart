@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -40,9 +41,11 @@ class InviteCodeBox extends StatelessWidget {
           if (showCopyButton)
             IconButton(
               icon: const Icon(Icons.copy_rounded, color: AppColors.primary),
-              onPressed: () {
-                // TODO: use package:flutter/services.dart Clipboard.setData.
-                AppToast.show(context, 'Invite code copied', type: AppToastType.success);
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: code));
+                if (context.mounted) {
+                  AppToast.show(context, 'Invite code copied', type: AppToastType.success);
+                }
               },
             ),
         ],

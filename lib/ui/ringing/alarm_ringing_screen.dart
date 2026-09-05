@@ -1,34 +1,43 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../../core/services/alarm_scheduler.dart';
+import '../../core/services/local_notifications_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../viewmodels/events_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../core_navigation/core_navigation_screen.dart';
 import 'color_match_task_screen.dart';
 
 /// Alarm Ringing Screen (product doc 5.8.1). Full-screen, no status bar or
 /// back navigation — the only way off this screen is to clear the task
 /// ("Tap to Stop") or, if the admin allowed it for this event, to snooze.
 ///
-/// TODO(backend wiring): this screen is the target of the exact-alarm
-/// trigger fired by Android `AlarmManager` (product doc Part 3, step 3).
-/// It should also force screen brightness to maximum per the doc — add
-/// the `screen_brightness` plugin when wiring the trigger itself.
+/// Snooze: [_handleSnooze] moves the event's `timeUTC` 5 minutes out via
+/// [EventsViewModel.snoozeEvent] — kinring-cron's existing per-minute
+/// backup push naturally re-fires it for the WHOLE group when that
+/// arrives, not just this device (see that method's doc comment for
+/// why bumping `timeUTC` alone is enough). This device also schedules
+/// its own local re-fire via [AlarmScheduler.scheduleSnoozeFor] for
+/// offline safety, same as the primary local-alarm-plus-cron-backup
+/// pattern used everywhere else. Previously this just re-pushed the
+/// same screen immediately with no real delay and no effect on anyone
+/// else's device — snoozing silently "solved" the alarm for good.
+///
+/// TODO(backend wiring): still needs `screen_brightness` to force max
+/// brightness per the doc.
 class AlarmRingingScreen extends StatefulWidget {
   AlarmRingingScreen({
     super.key,
     required this.draft,
     DateTime? startedAt,
-    this.snoozeCount = 0,
   }) : startedAt = startedAt ?? DateTime.now();
 
   final EventDraft draft;
   final DateTime startedAt;
-
-  /// How many times this event has already been snoozed. Drives Color
-  /// Match sequence length ("difficulty increases with each snooze").
-  final int snoozeCount;
 
   @override
   State<AlarmRingingScreen> createState() => _AlarmRingingScreenState();
@@ -36,6 +45,8 @@ class AlarmRingingScreen extends StatefulWidget {
 
 class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     with SingleTickerProviderStateMixin {
+  static const _snoozeDuration = Duration(minutes: 5);
+
   late final AnimationController _pulseController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
@@ -50,22 +61,44 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
   Future<void> _handleSnooze() async {
     final confirmed = await ConfirmationDialog.show(
       context,
-      title: 'Snooze',
-      message: 'Snoozing will increase task difficulty.',
-      confirmLabel: 'Snooze',
+      title: 'Snooze for 5 min',
+      message:
+          "It'll ring again for the WHOLE group in 5 minutes — snoozing doesn't stop it for anyone, it just delays it.",
+      confirmLabel: 'Snooze 5 min',
     );
     if (!confirmed || !mounted) return;
 
-    // TODO(backend wiring): a real snooze reschedules the next ring via
-    // AlarmManager rather than re-pushing this screen immediately.
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => AlarmRingingScreen(
-          draft: widget.draft,
-          startedAt: widget.startedAt,
-          snoozeCount: widget.snoozeCount + 1,
-        ),
-      ),
+    final draft = widget.draft;
+    final eventId = draft.eventId;
+    final newSnoozeCount = draft.snoozeCount + 1;
+    final fireAt = DateTime.now().add(_snoozeDuration);
+
+    if (eventId != null) {
+      // Bumps the event's timeUTC forward — kinring-cron picks this up
+      // at fireAt and pushes to EVERY member, not just this device (see
+      // EventsViewModel.snoozeEvent for why that's enough on its own).
+      await context.read<EventsViewModel>().snoozeEvent(
+            groupId: draft.groupId,
+            eventId: eventId,
+            newSnoozeCount: newSnoozeCount,
+            delay: _snoozeDuration,
+          );
+      // This device's own offline-safe local re-fire — belt-and-suspenders
+      // alongside the cron pickup above, same reasoning as the primary
+      // local-alarm-plus-cron-backup design everywhere else in the app.
+      await AlarmScheduler.scheduleSnoozeFor(draft.withSnoozeCount(newSnoozeCount), fireAt);
+    }
+
+    // The alarm is asleep for 5 minutes now — dismiss this device's
+    // notification/screen and go back to Home rather than sitting on a
+    // frozen ringing screen doing nothing for 5 minutes.
+    if (eventId != null) {
+      await LocalNotificationsService.dismiss(AlarmScheduler.alarmIdFor(eventId));
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const CoreNavigationScreen()),
+      (route) => false,
     );
   }
 
@@ -75,7 +108,6 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
         builder: (_) => ColorMatchTaskScreen(
           draft: widget.draft,
           startedAt: widget.startedAt,
-          snoozeCount: widget.snoozeCount,
         ),
       ),
     );
@@ -126,7 +158,7 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
                   TextButton(
                     onPressed: _handleSnooze,
                     style: TextButton.styleFrom(foregroundColor: AppColors.white),
-                    child: const Text('Snooze'),
+                    child: const Text('Snooze for 5 min'),
                   ),
                 ],
                 const SizedBox(height: AppSpacing.md),

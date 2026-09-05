@@ -4,6 +4,11 @@
          but release only merges this file, and both RingNowService and
          MediaUploadService need it to reach the Cloudflare Workers. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- mobile_scanner (QR scan on Join Group) — requested at runtime
+         too (see QrScanScreen), but Android still needs the manifest
+         entry or the runtime request is rejected outright. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:label="kinring"
         android:name="${applicationName}"

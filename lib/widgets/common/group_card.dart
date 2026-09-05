@@ -13,6 +13,7 @@ class GroupCard extends StatelessWidget {
     super.key,
     required this.groupName,
     required this.memberNames,
+    this.memberPhotoUrls,
     this.nextEventLabel,
     this.photoUrl,
     this.onTap,
@@ -21,6 +22,9 @@ class GroupCard extends StatelessWidget {
 
   final String groupName;
   final List<String> memberNames;
+
+  /// Same length/order as [memberNames] — see [AvatarStack.photoUrls].
+  final List<String?>? memberPhotoUrls;
   final String? nextEventLabel;
   final String? photoUrl;
   final VoidCallback? onTap;
@@ -62,7 +66,7 @@ class GroupCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Row(
               children: [
-                AvatarStack(names: memberNames, size: 24),
+                AvatarStack(names: memberNames, photoUrls: memberPhotoUrls, size: 24),
                 const SizedBox(width: AppSpacing.xs),
                 Text('${memberNames.length} members', style: textTheme.bodySmall),
               ],

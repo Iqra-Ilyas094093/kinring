@@ -147,12 +147,16 @@ class _GroupsScreenState extends State<GroupsScreen> {
                           final memberNames = (memberSnap.data ?? const <GroupMemberModel>[])
                               .map((m) => m.displayName ?? 'Member')
                               .toList();
+                          final memberPhotoUrls = (memberSnap.data ?? const <GroupMemberModel>[])
+                              .map((m) => m.photoUrl)
+                              .toList();
                           return GroupCard(
                             groupName: group.name,
                             photoUrl: group.photoUrl,
                             memberNames: memberNames.isEmpty
                                 ? List.filled(group.memberCount, 'Member')
                                 : memberNames,
+                            memberPhotoUrls: memberNames.isEmpty ? null : memberPhotoUrls,
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => GroupDetailsScreen(

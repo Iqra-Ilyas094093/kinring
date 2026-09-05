@@ -18,13 +18,33 @@ import '../../widgets/common/event_card.dart';
 class EventTrigger {
   EventTrigger._();
 
+  /// The eventId (or a synthetic key for eventId-less drafts) whose
+  /// ringing/task flow is currently on screen — guards against pushing
+  /// a SECOND `AlarmRingingScreen`/`ReminderNotificationCardScreen` for
+  /// the same event when it's already showing. Belt-and-suspenders
+  /// alongside `LocalNotificationsService`'s own dedup: that one stops
+  /// the underlying notification from re-firing `fullScreenIntent`, this
+  /// one stops a stray extra call to `fire()` (any caller, any path)
+  /// from double-pushing the route even if it does happen.
+  static String? _activeKey;
+
+  static String _keyFor(EventDraft draft) => draft.eventId ?? '${draft.groupId}:${draft.title}';
+
   static void fire(BuildContext context, EventDraft draft) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => draft.kind == EventKind.alarm
-            ? AlarmRingingScreen(draft: draft)
-            : ReminderNotificationCardScreen(draft: draft),
-      ),
-    );
+    final key = _keyFor(draft);
+    if (key == _activeKey) return;
+    _activeKey = key;
+
+    Navigator.of(context)
+        .push(
+          MaterialPageRoute(
+            builder: (_) => draft.kind == EventKind.alarm
+                ? AlarmRingingScreen(draft: draft)
+                : ReminderNotificationCardScreen(draft: draft),
+          ),
+        )
+        .whenComplete(() {
+      if (_activeKey == key) _activeKey = null;
+    });
   }
 }

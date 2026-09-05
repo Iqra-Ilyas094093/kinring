@@ -34,4 +34,40 @@ class NotificationsViewModel extends ChangeNotifier {
         .snapshots()
         .map((qs) => qs.docs.map(NotificationItem.fromDoc).toList());
   }
+
+  /// Backs the Home tab bell icon's badge. A plain count of unread docs
+  /// — cheap enough at this app's scale not to need a Firestore
+  /// aggregate `count()` query, and it's already live via the same
+  /// `read` field [markAllRead] flips.
+  Stream<int> listenUnreadCount() {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return Stream.value(0);
+    return _db
+        .collection('notifications')
+        .doc(uid)
+        .collection('items')
+        .where('read', isEqualTo: false)
+        .snapshots()
+        .map((qs) => qs.docs.length);
+  }
+
+  /// Called when the Notifications screen opens — clears the bell
+  /// badge. Only touches docs actually still unread, so repeat calls
+  /// (reopening the screen) are cheap no-ops once caught up.
+  Future<void> markAllRead() async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return;
+    final unread = await _db
+        .collection('notifications')
+        .doc(uid)
+        .collection('items')
+        .where('read', isEqualTo: false)
+        .get();
+    if (unread.docs.isEmpty) return;
+    final batch = _db.batch();
+    for (final doc in unread.docs) {
+      batch.update(doc.reference, {'read': true});
+    }
+    await batch.commit();
+  }
 }

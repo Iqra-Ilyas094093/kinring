@@ -24,14 +24,20 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
   static const _kReminderNotifications = 'notif_reminder_notifications';
   static const _kGroupActivityUpdates = 'notif_group_activity_updates';
   static const _kVolume = 'notif_volume';
-  static const _kVibration = 'notif_vibration';
 
   bool _loaded = false;
   bool _alarmSounds = true;
   bool _reminderNotifications = true;
-  bool _groupActivityUpdates = false;
+  // Defaults to ON — this was OFF before, which meant kinring-notify's
+  // pushes (member joined / event created / profile updated) never
+  // showed a heads-up out of the box even though the Firestore record
+  // (and the Notifications screen list) worked fine, since that part
+  // doesn't go through this gate at all. A toggle that silently starts
+  // OFF for a feature the person hasn't touched yet reads as "push
+  // notifications are broken" — better to default to on and let people
+  // opt out.
+  bool _groupActivityUpdates = true;
   double _volume = 0.8;
-  double _vibration = 0.6;
 
   @override
   void initState() {
@@ -45,9 +51,8 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
     setState(() {
       _alarmSounds = prefs.getBool(_kAlarmSounds) ?? true;
       _reminderNotifications = prefs.getBool(_kReminderNotifications) ?? true;
-      _groupActivityUpdates = prefs.getBool(_kGroupActivityUpdates) ?? false;
+      _groupActivityUpdates = prefs.getBool(_kGroupActivityUpdates) ?? true;
       _volume = prefs.getDouble(_kVolume) ?? 0.8;
-      _vibration = prefs.getDouble(_kVibration) ?? 0.6;
       _loaded = true;
     });
   }
@@ -102,17 +107,23 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             ),
             const SizedBox(height: AppSpacing.lg),
             Text('Volume', style: textTheme.bodyLarge),
+            Text(
+              'Whether the alarm plays sound at all — Android ties '
+              "sound to a fixed channel, so this switches between a "
+              'sound channel and a silent-but-still-vibrating one, '
+              "rather than a real continuous level.",
+              style: textTheme.bodySmall,
+            ),
             Slider(
               value: _volume,
               onChanged: _alarmSounds ? (v) => _setDouble(_kVolume, v, (x) => _volume = x) : null,
               activeColor: AppColors.primary,
             ),
-            Text('Vibration', style: textTheme.bodyLarge),
-            Slider(
-              value: _vibration,
-              onChanged: (v) => _setDouble(_kVibration, v, (x) => _vibration = x),
-              activeColor: AppColors.primary,
-            ),
+            // No separate Vibration slider — Android notification
+            // channels can't have their vibration toggled per-call any
+            // more than sound can (see LocalNotificationsService), and
+            // an alarm should always be felt at minimum, so both alarm
+            // channels (sound and silent) vibrate unconditionally.
           ],
         ),
       ),

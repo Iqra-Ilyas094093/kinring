@@ -8,6 +8,7 @@ import '../../models/group_model.dart';
 import '../../viewmodels/auth_viewmodel.dart';
 import '../../viewmodels/events_viewmodel.dart';
 import '../../viewmodels/groups_viewmodel.dart';
+import '../../viewmodels/notifications_viewmodel.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/group_card.dart';
@@ -51,11 +52,21 @@ class HomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('Hi, $greetingName', style: textTheme.headlineLarge),
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: AppColors.dark1),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                  ),
+                StreamBuilder<int>(
+                  stream: context.read<NotificationsViewModel>().listenUnreadCount(),
+                  builder: (context, unreadSnap) {
+                    final unread = unreadSnap.data ?? 0;
+                    return Badge(
+                      label: Text('$unread'),
+                      isLabelVisible: unread > 0,
+                      child: IconButton(
+                        icon: const Icon(Icons.notifications_outlined, color: AppColors.dark1),
+                        onPressed: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -143,6 +154,9 @@ class HomeScreen extends StatelessWidget {
                           final memberNames = (memberSnap.data ?? const <GroupMemberModel>[])
                               .map((m) => m.displayName ?? 'Member')
                               .toList();
+                          final memberPhotoUrls = (memberSnap.data ?? const <GroupMemberModel>[])
+                              .map((m) => m.photoUrl)
+                              .toList();
                           return GroupCard(
                             width: 220,
                             groupName: group.name,
@@ -150,6 +164,7 @@ class HomeScreen extends StatelessWidget {
                             memberNames: memberNames.isEmpty
                                 ? List.filled(group.memberCount, 'Member')
                                 : memberNames,
+                            memberPhotoUrls: memberNames.isEmpty ? null : memberPhotoUrls,
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => GroupDetailsScreen(

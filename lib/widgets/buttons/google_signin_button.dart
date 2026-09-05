@@ -30,9 +30,7 @@ class GoogleSignInButton extends StatelessWidget {
       child: OutlinedButton(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.dark1,
-          side: const BorderSide(color: AppColors.border),
-          backgroundColor: AppColors.white,
+          backgroundColor: AppColors.secondary,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -44,7 +42,7 @@ class GoogleSignInButton extends StatelessWidget {
               errorBuilder: (context, error, stackTrace) => Text(
                 'G',
                 style: textTheme.titleLarge?.copyWith(
-                  color: AppColors.dark1,
+                  color: AppColors.white,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -52,7 +50,7 @@ class GoogleSignInButton extends StatelessWidget {
             const SizedBox(width: AppSpacing.sm),
             Text(
               label,
-              style: textTheme.labelLarge?.copyWith(color: AppColors.dark1),
+              style: textTheme.labelLarge?.copyWith(color: AppColors.white),
             ),
           ],
         ),

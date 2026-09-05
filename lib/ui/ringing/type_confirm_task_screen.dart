@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/services/alarm_scheduler.dart';
+import '../../core/services/local_notifications_service.dart';
 import '../../models/event_draft.dart';
 import '../../viewmodels/event_status_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
@@ -37,6 +39,9 @@ class _TypeConfirmTaskScreenState extends State<TypeConfirmTaskScreen> {
   void _confirm() {
     // Phase 8: fire-and-forget, see ColorMatchTaskScreen for why.
     EventStatusViewModel().markCleared(groupId: widget.draft.groupId, eventId: widget.draft.eventId);
+    if (widget.draft.eventId != null) {
+      LocalNotificationsService.dismiss(AlarmScheduler.alarmIdFor(widget.draft.eventId!));
+    }
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => TaskClearedConfirmationScreen(

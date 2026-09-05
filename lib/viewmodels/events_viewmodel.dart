@@ -174,6 +174,54 @@ class EventsViewModel extends ChangeNotifier {
     }
   }
 
+  /// Snooze (product doc 5.9's "Snooze Confirmation" dialog, wired for
+  /// real here). Bumps the event's `timeUTC` forward by [delay] — which
+  /// re-opens it for `kinring-cron`'s existing idempotency check
+  /// (`lastFiredAt >= timeUTC` no longer holds once `timeUTC` moves past
+  /// it), so the SAME cron backup mechanism that already pushes to
+  /// every member re-fires the alarm for the WHOLE group when the delay
+  /// elapses — not just this device — without needing any new backend
+  /// worker. Also bumps `snoozeCount` (read back into the re-fired
+  /// [EventDraft] for difficulty scaling) and marks this member's own
+  /// status `snoozed` (the doc's amber "Snoozed" badge existed in the
+  /// UI already but nothing ever wrote this status until now).
+  ///
+  /// Only meaningful for a real persisted event — an ad-hoc Ring Now
+  /// broadcast (Phase 7) has `snoozeEnabled: false` on its draft, so the
+  /// Snooze button never shows for one; this is not called for those.
+  Future<bool> snoozeEvent({
+    required String groupId,
+    required String eventId,
+    required int newSnoozeCount,
+    Duration delay = const Duration(minutes: 5),
+  }) async {
+    try {
+      final snoozeUntil = DateTime.now().add(delay);
+      final batch = _db.batch();
+      batch.update(_db.collection('groups').doc(groupId).collection('events').doc(eventId), {
+        'timeUTC': Timestamp.fromDate(snoozeUntil),
+        'snoozeCount': newSnoozeCount,
+      });
+      batch.set(
+        _db
+            .collection('groups')
+            .doc(groupId)
+            .collection('events')
+            .doc(eventId)
+            .collection('statuses')
+            .doc(_uid),
+        {'status': 'snoozed'},
+        SetOptions(merge: true),
+      );
+      await batch.commit();
+      return true;
+    } catch (e) {
+      _errorMessage = 'Could not snooze. Please try again.';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> editEvent(EventDraft draft) async {
     final eventId = draft.eventId;
     if (eventId == null) {

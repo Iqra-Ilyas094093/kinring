@@ -16,8 +16,23 @@ import '../../widgets/common/empty_state.dart';
 /// `NotificationKind` enum lives on [NotificationItem] now (was
 /// duplicated locally here) so the Firestore model and this screen can't
 /// drift out of sync.
-class NotificationsScreen extends StatelessWidget {
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
+
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Clears the Home bell badge — items already in the list before this
+    // screen even finishes its first frame still count as "seen" the
+    // moment the person opens this screen, not only once they've
+    // scrolled past each one individually.
+    context.read<NotificationsViewModel>().markAllRead();
+  }
 
   ({IconData icon, Color color}) _styleFor(NotificationKind kind) => switch (kind) {
         NotificationKind.cleared => (icon: Icons.check_circle_rounded, color: AppColors.success),

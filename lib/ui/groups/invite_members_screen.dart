@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
@@ -10,9 +11,12 @@ import '../../widgets/feedback/app_toast.dart';
 /// Invite Members screen (product doc 5.6.4). Large invite code, copy,
 /// QR code, and a share-link action.
 ///
-/// TODO: qr code image needs a package (e.g. qr_flutter) added to
-/// pubspec.yaml — shown as a placeholder box until then. Share Link
-/// needs package:share_plus, also not yet a dependency.
+/// QR (via `qr_flutter`) encodes the invite code as plain text — the
+/// same string [JoinGroupScreen]'s QR scanner reads back and drops
+/// straight into its code field, so scanning and typing converge on the
+/// exact same join path.
+///
+/// TODO: Share Link needs package:share_plus, not yet a dependency.
 class InviteMembersScreen extends StatelessWidget {
   const InviteMembersScreen({
     super.key,
@@ -46,13 +50,22 @@ class InviteMembersScreen extends StatelessWidget {
               Container(
                 width: 200,
                 height: 200,
+                padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
-                  color: AppColors.light1,
+                  color: AppColors.white,
                   borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
                   border: Border.all(color: AppColors.border),
                 ),
-                alignment: Alignment.center,
-                child: const Icon(Icons.qr_code_2, size: 96, color: AppColors.dark2),
+                child: QrImageView(
+                  data: inviteCode,
+                  version: QrVersions.auto,
+                  backgroundColor: AppColors.white,
+                  eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: AppColors.dark1),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: AppColors.dark1,
+                  ),
+                ),
               ),
               const Spacer(),
               SecondaryButton(

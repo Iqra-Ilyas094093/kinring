@@ -25,10 +25,12 @@ class AppLogo extends StatelessWidget {
       AppLogoVariant.wordmark => AppAssets.logoWordmark,
     };
 
-    return Image.asset(
-      path,
-      height: height ?? (variant == AppLogoVariant.monogram ? 40 : 120),
-      fit: BoxFit.contain,
+    return Center(
+      child: Image.asset(
+        path,
+        height: height ?? (variant == AppLogoVariant.monogram ? 80 : 120),
+        fit: BoxFit.contain,
+      ),
     );
   }
 }

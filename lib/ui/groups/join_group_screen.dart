@@ -12,6 +12,7 @@ import '../../widgets/common/app_avatar.dart';
 import '../../widgets/feedback/app_toast.dart';
 import '../../widgets/inputs/app_text_field.dart';
 import 'group_details_screen.dart';
+import 'qr_scan_screen.dart';
 
 /// Join Group screen (product doc 5.6.2). Invite code entry (or QR scan),
 /// a live preview of the matched group once the code is valid, then Join.
@@ -55,6 +56,15 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
     });
   }
 
+  Future<void> _scanQr() async {
+    final scanned = await Navigator.of(context).push<String>(
+      MaterialPageRoute(builder: (_) => const QrScanScreen()),
+    );
+    if (scanned == null || !mounted) return;
+    _codeController.text = scanned;
+    _onCodeChanged(scanned);
+  }
+
   Future<void> _join() async {
     setState(() => _joining = true);
     final group = await context.read<GroupsViewModel>().joinGroup(_codeController.text.trim());
@@ -92,11 +102,7 @@ class _JoinGroupScreenState extends State<JoinGroupScreen> {
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
-                onPressed: () {
-                  // QR scanning needs a camera plugin (e.g. mobile_scanner)
-                  // not yet in pubspec.yaml — out of scope for MVP per doc.
-                  AppToast.show(context, 'QR scanning coming soon');
-                },
+                onPressed: _scanQr,
                 icon: const Icon(Icons.qr_code_scanner, color: AppColors.primary),
                 label: const Text('Scan QR Code'),
               ),

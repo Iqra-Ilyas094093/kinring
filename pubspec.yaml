@@ -84,6 +84,13 @@ dependencies:
   # MediaUploadService uploads it to the R2 media worker.
   image_picker: ^1.1.2
 
+  # Invite Members / Join Group — real QR generation + camera scanning
+  # (product doc 5.6.2/5.6.4 marked "Scan QR Code" as out of scope until
+  # a camera plugin was added; this is that plugin, plus qr_flutter for
+  # actually rendering the code instead of a placeholder icon).
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+
   # Phase 10 — local-only persistence for Notification/Accessibility
   # Settings toggles (doc explicitly calls these device-only, no cloud
   # sync needed).
@@ -136,6 +143,7 @@ flutter:
     - assets/
     - assets/logo/
     - assets/images/
+    - assets/icons/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

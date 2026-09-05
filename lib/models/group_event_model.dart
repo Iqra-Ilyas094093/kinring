@@ -26,6 +26,7 @@ class GroupEventModel {
     required this.confirmationPhrase,
     required this.useSimpleTap,
     required this.createdBy,
+    this.snoozeCount = 0,
   });
 
   final String id;
@@ -41,6 +42,13 @@ class GroupEventModel {
   final String confirmationPhrase;
   final bool useSimpleTap;
   final String createdBy;
+
+  /// How many times the CURRENT ring cycle has been snoozed — bumped by
+  /// [EventsViewModel.snoozeEvent], read back into the re-fired
+  /// [EventDraft] (both the client's own local re-schedule and the
+  /// kinring-cron backup push) so Color Match's difficulty scaling
+  /// survives across a snooze instead of resetting to 0.
+  final int snoozeCount;
 
   factory GroupEventModel.fromDoc(
     DocumentSnapshot<Map<String, dynamic>> doc,
@@ -65,6 +73,7 @@ class GroupEventModel {
       confirmationPhrase: data['confirmationPhrase'] as String? ?? '',
       useSimpleTap: data['useSimpleTap'] as bool? ?? true,
       createdBy: data['createdBy'] as String? ?? '',
+      snoozeCount: data['snoozeCount'] as int? ?? 0,
     );
   }
 
@@ -82,6 +91,7 @@ class GroupEventModel {
         snoozeEnabled: snoozeEnabled,
         confirmationPhrase: confirmationPhrase,
         useSimpleTap: useSimpleTap,
+        snoozeCount: snoozeCount,
       );
 
   static Map<String, dynamic> mapFromDraft({

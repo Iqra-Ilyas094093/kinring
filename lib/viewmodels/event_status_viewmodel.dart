@@ -39,6 +39,18 @@ class EventStatusViewModel extends ChangeNotifier {
     }, SetOptions(merge: true));
   }
 
+  /// Called when the ringing person snoozes instead of clearing —
+  /// updates their Live Status badge to "Snoozed" (product doc 5.9.1's
+  /// amber pill) instead of leaving them stuck on "Pending" for the
+  /// next 5 minutes, which read as if they hadn't even seen the alarm.
+  Future<void> markSnoozed({required String groupId, String? eventId}) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null || eventId == null || groupId.isEmpty) return;
+    await _statuses(groupId, eventId).doc(uid).set({
+      'status': 'snoozed',
+    }, SetOptions(merge: true));
+  }
+
   /// Live per-member status for the Live Group Status Screen. A member
   /// with no status doc yet (hasn't opened their task screen) has no
   /// entry here at all — [LiveGroupStatusScreen] merges this against

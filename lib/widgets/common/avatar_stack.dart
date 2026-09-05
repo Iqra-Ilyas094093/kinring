@@ -9,11 +9,19 @@ class AvatarStack extends StatelessWidget {
   const AvatarStack({
     super.key,
     required this.names,
+    this.photoUrls,
     this.size = 28,
     this.maxVisible = 4,
   });
 
   final List<String> names;
+
+  /// Same length/order as [names] when provided — index `i`'s photo for
+  /// index `i`'s name. `null` entries (or a wholly `null` list) fall
+  /// back to initials, same as [AppAvatar] itself does. Previously this
+  /// param didn't exist at all, so every avatar stack showed initials
+  /// only, even for members with a real profile photo.
+  final List<String?>? photoUrls;
   final double size;
   final int maxVisible;
 
@@ -38,7 +46,11 @@ class AvatarStack extends StatelessWidget {
                     BorderSide(color: AppColors.white, width: 2),
                   ),
                 ),
-                child: AppAvatar(name: visible[i], size: size),
+                child: AppAvatar(
+                  name: visible[i],
+                  imageUrl: (photoUrls != null && i < photoUrls!.length) ? photoUrls![i] : null,
+                  size: size,
+                ),
               ),
             ),
           if (overflow > 0)

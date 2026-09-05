@@ -49,6 +49,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Reset your password', style: textTheme.headlineLarge),

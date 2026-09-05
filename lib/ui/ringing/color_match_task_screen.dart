@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/services/alarm_scheduler.dart';
+import '../../core/services/local_notifications_service.dart';
 import '../../models/event_draft.dart';
 import '../../viewmodels/event_status_viewmodel.dart';
 import '../../widgets/common/color_swatch_button.dart';
@@ -47,12 +49,10 @@ class ColorMatchTaskScreen extends StatefulWidget {
     super.key,
     required this.draft,
     required this.startedAt,
-    this.snoozeCount = 0,
   });
 
   final EventDraft draft;
   final DateTime startedAt;
-  final int snoozeCount;
 
   @override
   State<ColorMatchTaskScreen> createState() => _ColorMatchTaskScreenState();
@@ -62,7 +62,7 @@ enum _Phase { preview, input }
 
 class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
   final _random = Random();
-  late int _sequenceLength = (3 + widget.snoozeCount).clamp(3, 6);
+  late int _sequenceLength = (3 + widget.draft.snoozeCount).clamp(3, 6);
   late List<Color> _sequence = _generateSequence();
   int _previewIndex = -1;
   int _inputProgress = 0;
@@ -132,6 +132,14 @@ class _ColorMatchTaskScreenState extends State<ColorMatchTaskScreen> {
         // confirmation animation, and a transient failure here isn't
         // worth blocking the user's device from unlocking over.
         EventStatusViewModel().markCleared(groupId: widget.draft.groupId, eventId: widget.draft.eventId);
+        // Also clear the lingering "ongoing" tray notification (and its
+        // fullScreenIntent dedup guard, see LocalNotificationsService) —
+        // previously nothing dismissed it on a successful clear, only on
+        // cancel/edit, so it could sit there and re-fire full-screen on
+        // a later duplicate push.
+        if (widget.draft.eventId != null) {
+          LocalNotificationsService.dismiss(AlarmScheduler.alarmIdFor(widget.draft.eventId!));
+        }
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => TaskClearedConfirmationScreen(

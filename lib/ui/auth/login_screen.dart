@@ -75,10 +75,12 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              const SizedBox(height: AppSpacing.xxl),
               const AppLogo(variant: AppLogoVariant.monogram),
-              const SizedBox(height: AppSpacing.lg),
-              Text('Welcome back', style: textTheme.headlineLarge),
+              const SizedBox(height: AppSpacing.xl),
+              Text('Welcome back', style: textTheme.headlineLarge,textAlign: TextAlign.start,),
               const SizedBox(height: AppSpacing.xs),
               Text('Log in to keep your groups in sync.', style: textTheme.bodyMedium),
               const SizedBox(height: AppSpacing.lg),
@@ -125,7 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
                           ),
-                  child: const Text('Forgot Password?'),
+                  child: const Text('Forgot Password?',style: TextStyle(color: AppColors.primary),),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -144,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : () => Navigator.of(context).push(
                             MaterialPageRoute(builder: (_) => const SignupScreen()),
                           ),
-                  child: const Text("Don't have an account? Sign Up"),
+                  child: const Text("Don't have an account? Sign Up",),
                 ),
               ),
             ],
