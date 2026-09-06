@@ -80,6 +80,31 @@ class LocalNotificationsService {
   /// `EventDraft.fromJson` either.
   static const _preAlertPayloadPrefix = 'prealert:';
 
+  /// Set once `initialize` (main isolate) OR [ensureReadyInBackgroundIsolate]
+  /// (any headless isolate) has run in THIS isolate. Dart statics are
+  /// per-isolate — `alarmFireCallback` and
+  /// `firebaseMessagingBackgroundHandler` each run in their own fresh
+  /// isolate spawned by the OS/FCM, so `_plugin` there has never been
+  /// initialized even though the main isolate already did it once. That
+  /// gap is why background/killed-app pushes and alarms were silently
+  /// not showing while everything in-app (foreground) worked fine.
+  static bool _isolateReady = false;
+
+  /// Call this first thing in every background entry point
+  /// (`alarmFireCallback`, `preAlertFireCallback`,
+  /// `firebaseMessagingBackgroundHandler`) before calling any
+  /// `showXNotification`. Cheap/no-op if this isolate already did it.
+  /// Re-creating the channels here too (not just `initialize`) covers
+  /// the edge case of a push arriving before the app's main isolate has
+  /// ever run once on this device.
+  static Future<void> ensureReadyInBackgroundIsolate() async {
+    if (_isolateReady) return;
+    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    await _plugin.initialize(const InitializationSettings(android: androidInit));
+    await _createChannels();
+    _isolateReady = true;
+  }
+
   static Future<void> initialize({required GlobalKey<NavigatorState> navigatorKey}) async {
     _navigatorKey = navigatorKey;
 
@@ -91,7 +116,14 @@ class LocalNotificationsService {
       onDidReceiveNotificationResponse: _onTap,
       onDidReceiveBackgroundNotificationResponse: onBackgroundTap,
     );
+    await _createChannels();
+    _isolateReady = true;
+  }
 
+  /// Shared by [initialize] (main isolate) and
+  /// [ensureReadyInBackgroundIsolate] (background isolates) so channel
+  /// definitions live in exactly one place.
+  static Future<void> _createChannels() async {
     const soundChannel = AndroidNotificationChannel(
       _alarmSoundChannelId,
       'Alarms (sound)',
@@ -123,7 +155,7 @@ class LocalNotificationsService {
       importance: Importance.defaultImportance,
     );
     final androidPlugin =
-        _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(soundChannel);
     await androidPlugin?.createNotificationChannel(silentChannel);
     await androidPlugin?.createNotificationChannel(reminderChannel);

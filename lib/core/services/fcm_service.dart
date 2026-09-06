@@ -155,6 +155,10 @@ class FcmService {
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Fresh isolate — same gap as alarmFireCallback. Without this, a push
+  // arriving while the app is backgrounded/killed can silently fail to
+  // show anything even though the token/data all arrived fine.
+  await LocalNotificationsService.ensureReadyInBackgroundIsolate();
 
   final type = message.data['type'];
   final draftJson = message.data['draft'] as String?;

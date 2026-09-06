@@ -143,6 +143,10 @@ class AlarmScheduler {
 @pragma('vm:entry-point')
 void alarmFireCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Fresh isolate — LocalNotificationsService's static plugin state from
+  // the main isolate does NOT carry over here. Without this, show()
+  // below can silently no-op when the app is backgrounded/killed.
+  await LocalNotificationsService.ensureReadyInBackgroundIsolate();
 
   final payloadJson = params['payload'] as String?;
   if (payloadJson == null) return;
@@ -206,6 +210,7 @@ void alarmFireCallback(int id, Map<String, dynamic> params) async {
 @pragma('vm:entry-point')
 void preAlertFireCallback(int id, Map<String, dynamic> params) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await LocalNotificationsService.ensureReadyInBackgroundIsolate();
 
   final payloadJson = params['payload'] as String?;
   if (payloadJson == null) return;
