@@ -4,17 +4,23 @@ import '../../models/event_draft.dart';
 import '../../ui/ringing/alarm_ringing_screen.dart';
 import '../../ui/ringing/reminder_notification_card_screen.dart';
 import '../../widgets/common/event_card.dart';
+import 'alarm_audio_service.dart';
 
 /// Single entry point into the Ringing/Task flow (doc 5.8).
 ///
-/// TODO(backend wiring): call `EventTrigger.fire` from two places once
-/// wired: (1) the Android `AlarmManager` receiver, for the primary
-/// scheduled trigger — Alarm kind opens straight into
-/// [AlarmRingingScreen]; (2) the FCM background/foreground handler, for
-/// "Ring Now" broadcasts and for Reminder kind (which is push-only, no
-/// full-screen gate). Until then, `AdminPanelScreen._ringNow` and
-/// `UpcomingEventDetailScreen`'s preview action call this same function,
-/// so the exact UI backend will trigger is already reachable and testable.
+/// This is the ONE place the ringing/reminder screen actually appears on
+/// screen, regardless of which path got here — local AlarmManager fire,
+/// FCM foreground direct-navigation (`FcmService._handleForegroundMessage`
+/// skips the notification entirely for alarm/reminder), a notification
+/// tap, or an admin "Ring Now"/event-detail preview. Sound/vibration is
+/// triggered HERE, not only in `LocalNotificationsService.showAlarmNotification`
+/// — that call only covers the background-isolate/notification path;
+/// without also covering this one, any path that reaches the screen
+/// without going through that notification call (e.g. FCM foreground)
+/// shows the screen with no sound, which is exactly the bug this fixes.
+/// Restarting an already-looping sound (e.g. user taps a notification
+/// that already started it) is harmless — `playAlarmSound` stops any
+/// existing playback before restarting.
 class EventTrigger {
   EventTrigger._();
 
@@ -35,16 +41,25 @@ class EventTrigger {
     if (key == _activeKey) return;
     _activeKey = key;
 
+    if (draft.kind == EventKind.alarm) {
+      AlarmAudioService.playAlarmSound();
+    } else {
+      AlarmAudioService.vibrateReminder();
+    }
+
     Navigator.of(context)
         .push(
-          MaterialPageRoute(
-            builder: (_) => draft.kind == EventKind.alarm
-                ? AlarmRingingScreen(draft: draft)
-                : ReminderNotificationCardScreen(draft: draft),
-          ),
-        )
+      MaterialPageRoute(
+        builder: (_) => draft.kind == EventKind.alarm
+            ? AlarmRingingScreen(draft: draft)
+            : ReminderNotificationCardScreen(draft: draft),
+      ),
+    )
         .whenComplete(() {
       if (_activeKey == key) _activeKey = null;
+      if (draft.kind == EventKind.alarm) {
+        AlarmAudioService.stopAlarmSound();
+      }
     });
   }
 }

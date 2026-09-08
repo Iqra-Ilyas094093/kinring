@@ -68,6 +68,26 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- android_alarm_manager_plus needs this to exist for
+             rescheduleOnReboot: true (used throughout AlarmScheduler).
+             Its own bundled manifest is supposed to add this
+             automatically, but in this project that merge isn't
+             happening — AlarmScheduler.scheduleForEvent was throwing
+             "Component class ...RebootBroadcastReceiver does not
+             exist", meaning EVERY local alarm schedule call was
+             crashing and never actually registering an alarm at all.
+             Declaring it explicitly here is the safe fix regardless of
+             why the auto-merge failed. Disabled by default — the
+             plugin enables/disables it itself at runtime via
+             setComponentEnabledSetting when rescheduleOnReboot is used. -->
+        <receiver
+            android:name="dev.fluttercommunity.plus.androidalarmmanager.RebootBroadcastReceiver"
+            android:enabled="false"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
