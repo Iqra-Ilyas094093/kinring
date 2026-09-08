@@ -9,6 +9,39 @@
          entry or the runtime request is rejected outright. -->
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-feature android:name="android.hardware.camera" android:required="false"/>
+
+    <!-- MISSING BEFORE — this whole block. targetSdk is Flutter's
+         current default (34/35), so every one of these is enforced by
+         the OS, not optional:
+
+         Without SCHEDULE_EXACT_ALARM, AndroidAlarmManager.oneShotAt(...,
+         exact: true) is blocked outright on Android 12+ — the local
+         alarm never gets scheduled at all, which is the actual reason
+         no sounds ever plays: there's nothing to fire.
+
+         Without POST_NOTIFICATIONS, no notification of any kind shows
+         on Android 13+ — local or FCM — regardless of channel settings.
+
+         Without USE_FULL_SCREEN_INTENT, Android 14+ can silently
+         degrade the alarm to a normal heads-up instead of the
+         lock-screen takeover.
+
+         Without RECEIVE_BOOT_COMPLETED, `rescheduleOnReboot: true`
+         (alarm_scheduler.dart) has nothing to attach to and does
+         nothing after a phone restart.
+
+         Without REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Doze/App Standby
+         can freeze the background isolate before an alarm fires or a
+         push is handled — this is also why FCM pushes were silent. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+
     <application
         android:label="kinring"
         android:name="${applicationName}"
@@ -27,9 +60,9 @@
                  while the Flutter UI initializes. After that, this theme continues
                  to determine the Window background behind the Flutter UI. -->
             <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme"
+                />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>

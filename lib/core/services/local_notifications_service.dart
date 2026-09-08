@@ -5,6 +5,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/event_draft.dart';
+import 'alarm_audio_service.dart';
 import 'event_trigger.dart';
 import '../../ui/home/notifications_screen.dart';
 
@@ -29,23 +30,24 @@ class LocalNotificationsService {
   /// are immutable once created on-device — changing `playSound`/
   /// `enableVibration` etc. in this file does nothing for anyone who
   /// already has an OLDER version of this channel from a previous
-  /// install/build, which is very likely why sound wasn't working at
-  /// all despite the code asking for it. A new channel id is the only
-  /// reliable way to make a settings change actually take effect.
-  static const _alarmSoundChannelId = 'kinring_alarm_sound_v2';
-
-  /// A second, separate alarm channel with NO sound — this is what the
-  /// "Alarm sounds" setting toggles between (channel SELECTION, not an
-  /// in-place mutation, since Android won't allow the latter). Both
-  /// still vibrate, both still full-screen; only the audio differs.
-  static const _alarmSilentChannelId = 'kinring_alarm_silent_v2';
+  /// install/build. A new channel id is the only reliable way to make a
+  /// settings change actually take effect.
+  /// Bumped to v4 — channel itself now stays silent/non-vibrating on
+  /// purpose; [AlarmAudioService] plays the custom sounds + vibration
+  /// directly instead (ALARM audio stream, not tied to the phone's
+  /// NOTIFICATION volume slider). No more separate sounds/silent channel
+  /// pair needed — the "Alarm sounds" setting now just decides whether
+  /// [AlarmAudioService.playAlarmSound] gets called, not which channel
+  /// to post to.
+  static const _alarmSoundChannelId = 'kinring_alarm_v4';
 
   /// Reminders' own channel — previously reminders were posted to the
-  /// SAME channel as alarms (`_channelId` above, now the alarm-sound
-  /// channel), so they silently inherited whatever sound/vibration the
-  /// alarm channel had instead of being their own distinct thing. No
-  /// sound, vibration only, per this request.
-  static const _reminderChannelId = 'kinring_reminder_v2';
+  /// SAME channel as alarms, so they silently inherited whatever
+  /// sounds/vibration the alarm channel had. Kept separate for the
+  /// full-screen-vs-heads-up distinction; sounds/vibration is now
+  /// [AlarmAudioService]'s job for this channel too (channel itself
+  /// silent/non-vibrating, see [_createChannels]).
+  static const _reminderChannelId = 'kinring_reminder_v3';
 
   /// Ids currently showing a `fullScreenIntent` alarm. Guards against the
   /// exact bug this was added to fix: the local `AlarmManager` trigger
@@ -126,27 +128,23 @@ class LocalNotificationsService {
   static Future<void> _createChannels() async {
     const soundChannel = AndroidNotificationChannel(
       _alarmSoundChannelId,
-      'Alarms (sound)',
-      description: 'KinRing group alarms — audible',
+      'Alarms',
+      description: 'KinRing group alarms — full-screen only; sounds/vibration handled by AlarmAudioService',
       importance: Importance.max,
-      playSound: true,
-      enableVibration: true,
-    );
-    const silentChannel = AndroidNotificationChannel(
-      _alarmSilentChannelId,
-      'Alarms (silent)',
-      description: 'KinRing group alarms — vibration only, no sound',
-      importance: Importance.max,
+      // Sound + vibration now handled entirely by AlarmAudioService
+      // (custom file, ALARM audio stream) — the channel's own job is
+      // just to carry the fullScreenIntent, so it stays silent to avoid
+      // a double-sounds/double-buzz on top of the custom playback.
       playSound: false,
-      enableVibration: true,
+      enableVibration: false,
     );
     const reminderChannel = AndroidNotificationChannel(
       _reminderChannelId,
       'Reminders',
-      description: 'KinRing group reminders — vibration only, no sound',
+      description: 'KinRing group reminders — vibration handled by AlarmAudioService',
       importance: Importance.high,
       playSound: false,
-      enableVibration: true,
+      enableVibration: false,
     );
     const activityChannel = AndroidNotificationChannel(
       _activityChannelId,
@@ -157,7 +155,6 @@ class LocalNotificationsService {
     final androidPlugin =
     _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
     await androidPlugin?.createNotificationChannel(soundChannel);
-    await androidPlugin?.createNotificationChannel(silentChannel);
     await androidPlugin?.createNotificationChannel(reminderChannel);
     await androidPlugin?.createNotificationChannel(activityChannel);
   }
@@ -178,14 +175,10 @@ class LocalNotificationsService {
 
 
   /// Called from [AlarmScheduler]'s fire callback (background isolate).
-  /// Always shows — an alarm's full-screen gate isn't something the
-  /// "Alarm sounds" setting should be able to suppress entirely, only
-  /// its audio. Picks between the two real alarm channels (sound vs
-  /// silent) based on the setting — channel SELECTION, since Android
-  /// won't let a single channel's sound be toggled per-call (see the
-  /// channel ids' doc comments). Both channels vibrate; "Vibration"
-  /// isn't separately toggleable for the same reason — an alarm should
-  /// always be felt at minimum.
+  /// Always shows the full-screen UI regardless of the "Alarm sounds"
+  /// setting — that setting now only gates whether
+  /// [AlarmAudioService.playAlarmSound] gets called, since sounds is no
+  /// longer a channel-selection concern (see [_createChannels]).
   static Future<void> showAlarmNotification({
     required int id,
     required String title,
@@ -195,7 +188,6 @@ class LocalNotificationsService {
     final prefs = await SharedPreferences.getInstance();
     final soundsOn = prefs.getBool('notif_alarm_sounds') ?? true;
     final volume = prefs.getDouble('notif_volume') ?? 0.8;
-    final channelId = (soundsOn && volume > 0) ? _alarmSoundChannelId : _alarmSilentChannelId;
 
     // See _fullScreenShown's doc comment — only the first show() for
     // this id gets to full-screen-launch; a near-duplicate (cron backup
@@ -203,8 +195,8 @@ class LocalNotificationsService {
     final alreadyShown = !_fullScreenShown.add(id);
 
     final details = AndroidNotificationDetails(
-      channelId,
-      channelId == _alarmSoundChannelId ? 'Alarms (sound)' : 'Alarms (silent)',
+      _alarmSoundChannelId,
+      'Alarms',
       channelDescription: 'KinRing group alarms',
       importance: Importance.max,
       priority: Priority.max,
@@ -221,6 +213,10 @@ class LocalNotificationsService {
       NotificationDetails(android: details),
       payload: payloadJson,
     );
+
+    if (soundsOn && volume > 0 && !alreadyShown) {
+      await AlarmAudioService.playAlarmSound();
+    }
   }
 
   /// Phase 5 — reminder push (doc 5.8.4). Unlike [showAlarmNotification]
@@ -228,13 +224,11 @@ class LocalNotificationsService {
   /// `ongoing` — Reminder kind is push-only and never gates the screen.
   /// Tapping it routes through the same `payload` → [EventTrigger.fire]
   /// path, landing on [ReminderNotificationCardScreen] via `EventDraft.kind`.
-  /// Posted to its OWN channel (vibration only, no sound) — previously
-  /// this shared the alarm channel, so a reminder inherited the alarm's
-  /// audio treatment instead of being the quieter, vibration-only nudge
-  /// it's supposed to be.
+  /// Vibration is [AlarmAudioService]'s custom pattern now, not the
+  /// channel's own (channel itself is silent/non-vibrating).
   ///
   /// Gated by Notification Settings' "Reminder notifications" toggle —
-  /// unlike alarm sound (above), turning this off means "don't show me
+  /// unlike alarm sounds (above), turning this off means "don't show me
   /// these at all", since a reminder (unlike an alarm) is soft by
   /// design and safe to fully suppress.
   static Future<void> showReminderNotification({
@@ -249,7 +243,7 @@ class LocalNotificationsService {
     const details = AndroidNotificationDetails(
       _reminderChannelId,
       'Reminders',
-      channelDescription: 'KinRing group reminders — vibration only, no sound',
+      channelDescription: 'KinRing group reminders',
       importance: Importance.high,
       priority: Priority.high,
       category: AndroidNotificationCategory.reminder,
@@ -261,6 +255,7 @@ class LocalNotificationsService {
       const NotificationDetails(android: details),
       payload: payloadJson,
     );
+    await AlarmAudioService.vibrateReminder();
   }
 
   /// Group activity — member joined, new event, profile updated
@@ -296,12 +291,16 @@ class LocalNotificationsService {
 
   static Future<void> dismiss(int id) {
     _fullScreenShown.remove(id);
+    // Notification cancel alone doesn't stop AlarmAudioService's looping
+    // player — it's a separate playback, not tied to the notification's
+    // own (now-silent) channel.
+    AlarmAudioService.stopAlarmSound();
     return _plugin.cancel(id);
   }
 
   /// "30 min left" heads-up (`AlarmScheduler.preAlertFireCallback`) —
   /// purely informational: no full-screen gate, no task/status wiring,
-  /// posted to the reminder channel (vibration only, no sound) since a
+  /// posted to the reminder channel (vibration only, no sounds) since a
   /// 30-minutes-out warning shouldn't be as jarring as the alarm itself
   /// firing. Tapping it just opens the app to Home — see [_route]'s
   /// `_preAlertPayloadPrefix` branch — there's no dedicated screen for
@@ -315,7 +314,7 @@ class LocalNotificationsService {
     const details = AndroidNotificationDetails(
       _reminderChannelId,
       'Reminders',
-      channelDescription: 'KinRing group reminders — vibration only, no sound',
+      channelDescription: 'KinRing group reminders — vibration only, no sounds',
       importance: Importance.high,
       priority: Priority.high,
     );

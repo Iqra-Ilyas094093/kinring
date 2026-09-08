@@ -108,9 +108,9 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             const SizedBox(height: AppSpacing.lg),
             Text('Volume', style: textTheme.bodyLarge),
             Text(
-              'Whether the alarm plays sound at all — Android ties '
-              "sound to a fixed channel, so this switches between a "
-              'sound channel and a silent-but-still-vibrating one, '
+              'Whether the alarm plays sounds at all — Android ties '
+              "sounds to a fixed channel, so this switches between a "
+              'sounds channel and a silent-but-still-vibrating one, '
               "rather than a real continuous level.",
               style: textTheme.bodySmall,
             ),
