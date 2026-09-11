@@ -9,6 +9,9 @@ class GroupModel {
     required this.createdBy,
     required this.memberIds,
     this.photoUrl,
+    this.lastMessageText,
+    this.lastMessageAt,
+    this.lastMessageSenderUid,
   });
 
   final String id;
@@ -18,10 +21,19 @@ class GroupModel {
   final String createdBy;
   final List<String> memberIds;
 
+  /// Denormalized onto the group doc by [ChatViewModel.sendMessage] —
+  /// see product doc Part 15.2 — so the Chat tab's group list can render
+  /// previews from the existing `listenGroups` query instead of reading
+  /// every group's `messages` subcollection.
+  final String? lastMessageText;
+  final DateTime? lastMessageAt;
+  final String? lastMessageSenderUid;
+
   int get memberCount => memberIds.length;
 
   factory GroupModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const {};
+    final lastMsgTs = data['lastMessageAt'];
     return GroupModel(
       id: doc.id,
       name: data['name'] as String? ?? '',
@@ -29,6 +41,9 @@ class GroupModel {
       inviteCode: data['inviteCode'] as String? ?? '',
       createdBy: data['createdBy'] as String? ?? '',
       memberIds: List<String>.from(data['memberIds'] as List? ?? const []),
+      lastMessageText: data['lastMessageText'] as String?,
+      lastMessageAt: lastMsgTs is Timestamp ? lastMsgTs.toDate() : null,
+      lastMessageSenderUid: data['lastMessageSenderUid'] as String?,
     );
   }
 

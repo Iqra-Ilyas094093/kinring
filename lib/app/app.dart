@@ -5,6 +5,7 @@ import '../core/theme/app_theme.dart';
 import '../main.dart' show navigatorKey;
 import '../ui/auth/auth_gate.dart';
 import '../viewmodels/auth_viewmodel.dart';
+import '../viewmodels/chat_viewmodel.dart';
 import '../viewmodels/events_viewmodel.dart';
 import '../viewmodels/groups_viewmodel.dart';
 import '../viewmodels/notifications_viewmodel.dart';
@@ -13,8 +14,8 @@ import '../viewmodels/notifications_viewmodel.dart';
 /// the only place `theme:` is set — every screen inherits it via
 /// `Theme.of(context)`, never by building its own `ThemeData`.
 ///
-/// [AuthViewModel], [GroupsViewModel], [EventsViewModel], and
-/// [NotificationsViewModel] are each
+/// [AuthViewModel], [GroupsViewModel], [EventsViewModel],
+/// [NotificationsViewModel], and [ChatViewModel] are each
 /// provided once, here, at the app root — every screen shares the exact
 /// same instance (and therefore the same in-flight loading/error state
 /// and the same Firestore streams), same pattern as `AuthViewModel`
@@ -32,6 +33,7 @@ class KinRingApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => GroupsViewModel()),
         ChangeNotifierProvider(create: (_) => EventsViewModel()),
         ChangeNotifierProvider(create: (_) => NotificationsViewModel()),
+        ChangeNotifierProvider(create: (_) => ChatViewModel()),
       ],
       child: MaterialApp(
         title: 'KinRing',

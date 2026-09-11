@@ -44,8 +44,23 @@ service cloud.firestore {
 
         match /statuses/{uid} {
           allow read: if isMember(groupId);
+          // Self-write: your own status doc (ringing/cleared/snoozed).
           allow write: if isMember(groupId) && request.auth.uid == uid;
+          // Admin force-stop: a group admin may write to a DIFFERENT
+          // member's status doc, but ONLY to force-clear it.
+          allow write: if isAdmin(groupId) &&
+            request.auth.uid != uid &&
+            request.resource.data.status == 'cleared' &&
+            request.resource.data.forceStoppedByAdmin == true;
         }
+      }
+
+      // Chat System — product doc Part 15. Text-only: create is allowed,
+      // update/delete is not (no edit/delete per Part 15.1 scope).
+      match /messages/{messageId} {
+        allow read: if isMember(groupId);
+        allow create: if isMember(groupId) && request.resource.data.senderUid == request.auth.uid;
+        allow update, delete: if false;
       }
     }
 
