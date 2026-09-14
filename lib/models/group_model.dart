@@ -70,6 +70,7 @@ class GroupMemberModel {
     this.displayName,
     this.photoUrl,
     this.joinedAt,
+    this.lastReadChatAt,
   });
 
   final String uid;
@@ -79,11 +80,17 @@ class GroupMemberModel {
   final String? photoUrl;
   final DateTime? joinedAt;
 
+  /// Written by [ChatViewModel.markThreadRead] whenever this member opens
+  /// the group's chat thread — Chat tab's unread badge (Part 15) compares
+  /// this against each message's `sentAt` to count unread.
+  final DateTime? lastReadChatAt;
+
   bool get isAdmin => role == 'admin';
 
   factory GroupMemberModel.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final data = doc.data() ?? const {};
     final ts = data['joinedAt'];
+    final readTs = data['lastReadChatAt'];
     return GroupMemberModel(
       uid: doc.id,
       role: data['role'] as String? ?? 'member',
@@ -91,6 +98,7 @@ class GroupMemberModel {
       displayName: data['displayName'] as String?,
       photoUrl: data['photoUrl'] as String?,
       joinedAt: ts is Timestamp ? ts.toDate() : null,
+      lastReadChatAt: readTs is Timestamp ? readTs.toDate() : null,
     );
   }
 

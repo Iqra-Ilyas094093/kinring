@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 /// cleared, snoozed, ring-now, reminder confirmed, group activity — plus
 /// eventCreated/profileUpdated for the notification fan-out worker
 /// (kinring-notify).
-enum NotificationKind { cleared, snoozed, ringNow, reminderConfirmed, groupActivity, eventCreated, profileUpdated }
+enum NotificationKind { cleared, snoozed, ringNow, reminderConfirmed, groupActivity, eventCreated, profileUpdated, chatMessage }
 
 NotificationKind _kindFromString(String? v) => NotificationKind.values.firstWhere(
       (e) => e.name == v,

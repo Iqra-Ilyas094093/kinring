@@ -219,18 +219,13 @@ class LocalNotificationsService {
     }
   }
 
-  /// Phase 5 — reminder push (doc 5.8.4). Unlike [showAlarmNotification]
-  /// this is a normal heads-up notification, not `fullScreenIntent`/
-  /// `ongoing` — Reminder kind is push-only and never gates the screen.
-  /// Tapping it routes through the same `payload` → [EventTrigger.fire]
-  /// path, landing on [ReminderNotificationCardScreen] via `EventDraft.kind`.
-  /// Vibration is [AlarmAudioService]'s custom pattern now, not the
-  /// channel's own (channel itself is silent/non-vibrating).
+  /// Phase 5 — reminder push (doc 5.8.4). NOW full-screen/lock-screen
+  /// takeover, same as [showAlarmNotification]. Sound is
+  /// [AlarmAudioService.playReminderSound] (custom file, looping) and
+  /// vibration is its own pattern.
   ///
   /// Gated by Notification Settings' "Reminder notifications" toggle —
-  /// unlike alarm sounds (above), turning this off means "don't show me
-  /// these at all", since a reminder (unlike an alarm) is soft by
-  /// design and safe to fully suppress.
+  /// turning this off means "don't show me these at all".
   static Future<void> showReminderNotification({
     required int id,
     required String title,
@@ -240,22 +235,32 @@ class LocalNotificationsService {
     final prefs = await SharedPreferences.getInstance();
     if (!(prefs.getBool('notif_reminder_notifications') ?? true)) return;
 
-    const details = AndroidNotificationDetails(
+    final alreadyShown = !_fullScreenShown.add(id);
+
+    final details = AndroidNotificationDetails(
       _reminderChannelId,
       'Reminders',
       channelDescription: 'KinRing group reminders',
-      importance: Importance.high,
-      priority: Priority.high,
+      importance: Importance.max,
+      priority: Priority.max,
       category: AndroidNotificationCategory.reminder,
+      fullScreenIntent: !alreadyShown,
+      ongoing: true,
+      autoCancel: false,
+      visibility: NotificationVisibility.public,
     );
     await _plugin.show(
       id,
       title,
       body,
-      const NotificationDetails(android: details),
+      NotificationDetails(android: details),
       payload: payloadJson,
     );
-    await AlarmAudioService.vibrateReminder();
+
+    if (!alreadyShown) {
+      await AlarmAudioService.playReminderSound();
+      await AlarmAudioService.vibrateReminder();
+    }
   }
 
   /// Group activity — member joined, new event, profile updated
@@ -291,10 +296,10 @@ class LocalNotificationsService {
 
   static Future<void> dismiss(int id) {
     _fullScreenShown.remove(id);
-    // Notification cancel alone doesn't stop AlarmAudioService's looping
-    // player — it's a separate playback, not tied to the notification's
-    // own (now-silent) channel.
+    // Stop both — dismiss() is called generically for alarm OR reminder
+    // ids, and stopping a player that isn't playing is a harmless no-op.
     AlarmAudioService.stopAlarmSound();
+    AlarmAudioService.stopReminderSound();
     return _plugin.cancel(id);
   }
 

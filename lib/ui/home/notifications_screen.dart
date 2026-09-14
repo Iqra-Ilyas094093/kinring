@@ -42,6 +42,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         NotificationKind.groupActivity => (icon: Icons.groups_rounded, color: AppColors.primary),
         NotificationKind.eventCreated => (icon: Icons.alarm_add_rounded, color: AppColors.secondary),
         NotificationKind.profileUpdated => (icon: Icons.person_rounded, color: AppColors.primary),
+        NotificationKind.chatMessage => (icon: Icons.chat_bubble_rounded, color: AppColors.primary),
       };
 
   String _relativeTime(DateTime ts) {

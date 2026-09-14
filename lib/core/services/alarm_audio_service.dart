@@ -23,12 +23,23 @@ class AlarmAudioService {
   AlarmAudioService._();
 
   static final AudioPlayer _player = AudioPlayer();
+  // Separate instance from the alarm player — an alarm and a reminder
+  // could theoretically be ringing for two different events at once;
+  // sharing one AudioPlayer would mean the second `.play()` cuts off
+  // the first via the shared `.stop()` at the top of each method.
+  static final AudioPlayer _reminderPlayer = AudioPlayer();
 
   /// File lives at `assets/sounds/alarm_sound.mp3` — must be declared
   /// under `flutter: assets:` in pubspec.yaml (already added) AND
   /// physically present on disk, or [playAlarmSound] fails at the
   /// `.play()` call below (previously failing silently — now logged).
   static const _alarmAssetPath = 'sounds/alarm_sound.mp3';
+
+  /// Matches the actual filename in assets/sounds/ — hyphenated, not
+  /// underscored, since that's what was added to the project. If you
+  /// rename the file, update this constant to match (they must be
+  /// identical, asset lookups are exact-string).
+  static const _reminderAssetPath = 'sounds/reminder-sound.mp3';
 
   /// Starts the alarm sound, looping, on the ALARM stream. Safe to call
   /// even if a previous alarm's sound never got stopped (e.g. app was
@@ -69,6 +80,44 @@ class AlarmAudioService {
         error: e,
         stackTrace: st,
       );
+    }
+  }
+
+  /// Reminder's own sound, looping — reminders are full-screen now (same
+  /// as alarms), so it needs to persist until the screen is left, not
+  /// play once and stop.
+  static Future<void> playReminderSound() async {
+    try {
+      await _reminderPlayer.stop();
+      await _reminderPlayer.setReleaseMode(ReleaseMode.loop);
+      await _reminderPlayer.setAudioContext(
+         AudioContext(
+          android: AudioContextAndroid(
+            isSpeakerphoneOn: true,
+            stayAwake: true,
+            usageType: AndroidUsageType.alarm,
+            audioFocus: AndroidAudioFocus.gain,
+          ),
+        ),
+      );
+      await _reminderPlayer.setVolume(1.0);
+      await _reminderPlayer.play(AssetSource(_reminderAssetPath));
+      developer.log('reminder sound started', name: 'AlarmAudioService');
+    } catch (e, st) {
+      developer.log(
+        'FAILED to play reminder sound: $e',
+        name: 'AlarmAudioService',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
+
+  static Future<void> stopReminderSound() async {
+    try {
+      await _reminderPlayer.stop();
+    } catch (e) {
+      developer.log('stopReminderSound error: $e', name: 'AlarmAudioService');
     }
   }
 

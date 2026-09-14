@@ -6,6 +6,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/relative_time.dart';
 import '../../models/group_model.dart';
+import '../../viewmodels/chat_viewmodel.dart';
 import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/chat_preview_row.dart';
 import '../../widgets/common/empty_state.dart';
@@ -23,6 +24,7 @@ class ChatListScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final groupsVm = context.read<GroupsViewModel>();
+    final chatVm = context.read<ChatViewModel>();
     final myUid = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
@@ -68,17 +70,33 @@ class ChatListScreen extends StatelessWidget {
                     separatorBuilder: (_, __) => const Divider(color: AppColors.border, height: 1),
                     itemBuilder: (context, i) {
                       final group = sorted[i];
-                      return ChatPreviewRow(
-                        groupName: group.name,
-                        photoUrl: group.photoUrl,
-                        lastMessageText: group.lastMessageText,
-                        lastMessageIsMine: group.lastMessageSenderUid != null && group.lastMessageSenderUid == myUid,
-                        timeLabel: group.lastMessageAt != null ? relativeTime(group.lastMessageAt!) : null,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => GroupChatScreen(groupId: group.id, groupName: group.name, groupPhotoUrl: group.photoUrl),
-                          ),
-                        ),
+                      return StreamBuilder<DateTime?>(
+                        stream: chatVm.listenMyLastRead(group.id),
+                        builder: (context, lastReadSnap) {
+                          // Waiting state (no data yet) is treated as
+                          // "never read" (null) rather than blocking the
+                          // row — same fallback listenUnreadCount uses
+                          // for a brand new member with no read marker.
+                          final since = lastReadSnap.data;
+                          return StreamBuilder<int>(
+                            stream: chatVm.listenUnreadCount(groupId: group.id, since: since),
+                            builder: (context, unreadSnap) {
+                              return ChatPreviewRow(
+                                groupName: group.name,
+                                photoUrl: group.photoUrl,
+                                lastMessageText: group.lastMessageText,
+                                lastMessageIsMine: group.lastMessageSenderUid != null && group.lastMessageSenderUid == myUid,
+                                timeLabel: group.lastMessageAt != null ? relativeTime(group.lastMessageAt!) : null,
+                                unreadCount: unreadSnap.data ?? 0,
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => GroupChatScreen(groupId: group.id, groupName: group.name, groupPhotoUrl: group.photoUrl),
+                                  ),
+                                ),
+                              );
+                            },
+                          );
+                        },
                       );
                     },
                   );

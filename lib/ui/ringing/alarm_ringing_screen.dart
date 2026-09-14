@@ -1,14 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/services/alarm_audio_service.dart';
 import '../../core/services/alarm_scheduler.dart';
 import '../../core/services/local_notifications_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../models/event_draft.dart';
+import '../../models/event_status_model.dart';
+import '../../viewmodels/event_status_viewmodel.dart';
 import '../../viewmodels/events_viewmodel.dart';
 import '../../widgets/buttons/primary_button.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/status_badge.dart';
 import '../core_navigation/core_navigation_screen.dart';
 import 'color_match_task_screen.dart';
 
@@ -47,13 +53,49 @@ class _AlarmRingingScreenState extends State<AlarmRingingScreen>
     with SingleTickerProviderStateMixin {
   static const _snoozeDuration = Duration(minutes: 5);
 
+  final _statusVm = EventStatusViewModel();
+  StreamSubscription<EventStatusModel?>? _statusSub;
+  bool _forceStopped = false;
+
   late final AnimationController _pulseController = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 900),
   )..repeat(reverse: true);
 
   @override
+  void initState() {
+    super.initState();
+    final eventId = widget.draft.eventId;
+    if (eventId != null) {
+      _statusVm.markRinging(groupId: widget.draft.groupId, eventId: eventId);
+      _statusSub = _statusVm
+          .listenMyStatus(groupId: widget.draft.groupId, eventId: eventId)
+          .listen(_onStatusChanged);
+    }
+  }
+
+  void _onStatusChanged(EventStatusModel? status) {
+    if (_forceStopped || !mounted) return;
+    if (status?.status == EventMemberStatus.cleared && status?.forceStoppedByAdmin == true) {
+      _forceStopped = true;
+      AlarmAudioService.stopAlarmSound();
+      final eventId = widget.draft.eventId;
+      if (eventId != null) {
+        LocalNotificationsService.dismiss(AlarmScheduler.alarmIdFor(eventId));
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('An admin stopped this alarm for you.')),
+      );
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const CoreNavigationScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  @override
   void dispose() {
+    _statusSub?.cancel();
     _pulseController.dispose();
     super.dispose();
   }

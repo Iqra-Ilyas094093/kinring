@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +12,7 @@ import '../../models/group_model.dart';
 import '../../viewmodels/event_status_viewmodel.dart';
 import '../../viewmodels/groups_viewmodel.dart';
 import '../../widgets/common/app_avatar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/countdown_text.dart';
 import '../../widgets/common/event_card.dart';
 import '../../widgets/common/status_badge.dart';
@@ -67,6 +71,7 @@ class _LiveGroupStatusScreenState extends State<LiveGroupStatusScreen> {
         : widget.draft.title.trim();
     final groupsVm = context.read<GroupsViewModel>();
     final eventId = widget.draft.eventId;
+    final myUid = FirebaseAuth.instance.currentUser?.uid;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -98,11 +103,17 @@ class _LiveGroupStatusScreenState extends State<LiveGroupStatusScreen> {
                             return const Center(child: CircularProgressIndicator());
                           }
                           final members = memberSnap.data ?? const <GroupMemberModel>[];
+                          final isAdmin = members.any((m) => m.uid == myUid && m.isAdmin);
 
                           if (eventId == null) {
-                            // Ring Now broadcast — no statuses subcollection to
-                            // listen to; show everyone as Pending.
-                            return _MemberList(members: members, statusByUid: const {});
+                            return _MemberList(
+                              members: members,
+                              statusByUid: const {},
+                              isAdmin: false,
+                              groupId: widget.draft.groupId,
+                              eventId: null,
+                              statusVm: _statusVm,
+                            );
                           }
 
                           return StreamBuilder<List<EventStatusModel>>(
@@ -110,8 +121,15 @@ class _LiveGroupStatusScreenState extends State<LiveGroupStatusScreen> {
                             builder: (context, statusSnap) {
                               final statuses = statusSnap.data ?? const <EventStatusModel>[];
                               _maybeAutoNavigateHome(members, statuses);
-                              final statusByUid = {for (final s in statuses) s.uid: s.status};
-                              return _MemberList(members: members, statusByUid: statusByUid);
+                              final statusByUid = {for (final s in statuses) s.uid: s};
+                              return _MemberList(
+                                members: members,
+                                statusByUid: statusByUid,
+                                isAdmin: isAdmin,
+                                groupId: widget.draft.groupId,
+                                eventId: eventId,
+                                statusVm: _statusVm,
+                              );
                             },
                           );
                         },
@@ -125,21 +143,79 @@ class _LiveGroupStatusScreenState extends State<LiveGroupStatusScreen> {
   }
 }
 
-class _MemberList extends StatelessWidget {
-  const _MemberList({required this.members, required this.statusByUid});
+class _MemberList extends StatefulWidget {
+  const _MemberList({
+    required this.members,
+    required this.statusByUid,
+    required this.isAdmin,
+    required this.groupId,
+    required this.eventId,
+    required this.statusVm,
+  });
 
   final List<GroupMemberModel> members;
-  final Map<String, EventMemberStatus> statusByUid;
+  final Map<String, EventStatusModel> statusByUid;
+  final bool isAdmin;
+  final String groupId;
+  final String? eventId;
+  final EventStatusViewModel statusVm;
+
+  @override
+  State<_MemberList> createState() => _MemberListState();
+}
+
+class _MemberListState extends State<_MemberList> {
+  static const _forceStopGate = Duration(seconds: 30);
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _confirmAndForceStop(GroupMemberModel member) async {
+    final eventId = widget.eventId;
+    if (eventId == null) return;
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      title: 'Force stop alarm?',
+      message:
+          "This immediately silences ${member.displayName ?? 'this member'}'s alarm on their device, even though they haven't cleared it themselves.",
+      confirmLabel: 'Force Stop',
+    );
+    if (!confirmed) return;
+    await widget.statusVm.forceStop(
+      groupId: widget.groupId,
+      eventId: eventId,
+      targetUid: member.uid,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return ListView.separated(
-      itemCount: members.length,
+      itemCount: widget.members.length,
       separatorBuilder: (_, __) => const Divider(color: AppColors.border),
       itemBuilder: (context, i) {
-        final member = members[i];
-        final status = statusByUid[member.uid] ?? EventMemberStatus.pending;
+        final member = widget.members[i];
+        final statusModel = widget.statusByUid[member.uid];
+        final status = statusModel?.status ?? EventMemberStatus.pending;
+
+        final ringingLongEnough = status == EventMemberStatus.ringing &&
+            statusModel?.ringingAt != null &&
+            DateTime.now().difference(statusModel!.ringingAt!) >= _forceStopGate;
+        final canForceStop = widget.isAdmin && ringingLongEnough;
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
           child: Row(
@@ -150,6 +226,14 @@ class _MemberList extends StatelessWidget {
                 child: Text(member.displayName ?? 'Member', style: textTheme.bodyLarge),
               ),
               StatusBadge(status: status),
+              if (canForceStop) ...[
+                const SizedBox(width: AppSpacing.sm),
+                TextButton(
+                  onPressed: () => _confirmAndForceStop(member),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                  child: const Text('Force Stop'),
+                ),
+              ],
             ],
           ),
         );

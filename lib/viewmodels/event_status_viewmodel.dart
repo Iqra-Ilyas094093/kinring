@@ -51,6 +51,45 @@ class EventStatusViewModel extends ChangeNotifier {
     }, SetOptions(merge: true));
   }
 
+  /// Written the moment the ringing/reminder screen actually opens on a
+  /// device — this is what [forceStop]'s 30-second gate is computed
+  /// against.
+  Future<void> markRinging({required String groupId, String? eventId}) async {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null || eventId == null || groupId.isEmpty) return;
+    await _statuses(groupId, eventId).doc(uid).set({
+      'status': 'ringing',
+      'ringingAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Admin-only: force-silence one member's still-ringing alarm/reminder
+  /// remotely. The target device (subscribed to its own status doc via
+  /// [listenMyStatus]) sees this and stops itself.
+  Future<void> forceStop({
+    required String groupId,
+    required String eventId,
+    required String targetUid,
+  }) async {
+    await _statuses(groupId, eventId).doc(targetUid).set({
+      'status': 'cleared',
+      'clearedAt': FieldValue.serverTimestamp(),
+      'forceStoppedByAdmin': true,
+    }, SetOptions(merge: true));
+  }
+
+  /// The signed-in user's own status doc for one event — what
+  /// [AlarmRingingScreen]/[ReminderNotificationCardScreen] subscribe to
+  /// so a [forceStop] from an admin can actually reach this device.
+  Stream<EventStatusModel?> listenMyStatus({required String groupId, required String eventId}) {
+    final uid = _auth.currentUser?.uid;
+    if (uid == null) return Stream.value(null);
+    return _statuses(groupId, eventId)
+        .doc(uid)
+        .snapshots()
+        .map((doc) => doc.exists ? EventStatusModel.fromDoc(doc) : null);
+  }
+
   /// Live per-member status for the Live Group Status Screen. A member
   /// with no status doc yet (hasn't opened their task screen) has no
   /// entry here at all — [LiveGroupStatusScreen] merges this against

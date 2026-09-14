@@ -44,6 +44,7 @@ class EventTrigger {
     if (draft.kind == EventKind.alarm) {
       AlarmAudioService.playAlarmSound();
     } else {
+      AlarmAudioService.playReminderSound();
       AlarmAudioService.vibrateReminder();
     }
 
@@ -59,6 +60,8 @@ class EventTrigger {
       if (_activeKey == key) _activeKey = null;
       if (draft.kind == EventKind.alarm) {
         AlarmAudioService.stopAlarmSound();
+      } else {
+        AlarmAudioService.stopReminderSound();
       }
     });
   }

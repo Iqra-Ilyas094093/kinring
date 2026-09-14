@@ -16,6 +16,7 @@ class ChatPreviewRow extends StatelessWidget {
     this.lastMessageText,
     this.lastMessageIsMine = false,
     this.timeLabel,
+    this.unreadCount = 0,
     this.onTap,
   });
 
@@ -24,6 +25,10 @@ class ChatPreviewRow extends StatelessWidget {
   final String? lastMessageText;
   final bool lastMessageIsMine;
   final String? timeLabel;
+
+  /// Shown as a small pill on the right, same [Badge] widget already
+  /// used for the Home tab's notification bell — 0 renders nothing.
+  final int unreadCount;
   final VoidCallback? onTap;
 
   @override
@@ -32,6 +37,7 @@ class ChatPreviewRow extends StatelessWidget {
     final preview = lastMessageText == null || lastMessageText!.isEmpty
         ? 'No messages yet'
         : (lastMessageIsMine ? 'You: ${lastMessageText!}' : lastMessageText!);
+    final hasUnread = unreadCount > 0;
 
     return InkWell(
       onTap: onTap,
@@ -49,17 +55,37 @@ class ChatPreviewRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     preview,
-                    style: textTheme.bodyMedium?.copyWith(color: AppColors.dark2),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: hasUnread ? AppColors.dark1 : AppColors.dark2,
+                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),
             ),
-            if (timeLabel != null) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Text(timeLabel!, style: textTheme.bodySmall),
-            ],
+            const SizedBox(width: AppSpacing.sm),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (timeLabel != null) Text(timeLabel!, style: textTheme.bodySmall),
+                if (hasUnread) ...[
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                    constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                    child: Text(
+                      unreadCount > 99 ? '99+' : '$unreadCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: AppColors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ],
         ),
       ),

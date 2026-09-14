@@ -35,6 +35,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
   bool _sending = false;
 
   @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget — opening the thread is what "read" means here,
+    // not waiting for the user to scroll or do anything else.
+    context.read<ChatViewModel>().markThreadRead(groupId: widget.groupId);
+  }
+
+  @override
   void dispose() {
     _composerController.dispose();
     super.dispose();
@@ -46,6 +54,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     setState(() => _sending = true);
     _composerController.clear();
     await chatVm.sendMessage(groupId: widget.groupId, text: text);
+    await chatVm.markThreadRead(groupId: widget.groupId);
     if (mounted) setState(() => _sending = false);
   }
 

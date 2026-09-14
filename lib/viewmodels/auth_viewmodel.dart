@@ -239,12 +239,30 @@ class AuthViewModel extends ChangeNotifier {
   }
 
   Future<void> signOut() async {
-    // Must run before _auth.signOut() — needs currentUser to still be
-    // non-null to know which users/{uid} doc to pull the token off.
-    await FcmService.clearTokenForCurrentUser();
-    await _googleAuthService.signOut();
-    await _auth.signOut();
+    try {
+      // 1. Attempt token cleanup while user is still authenticated
+      await FcmService.clearTokenForCurrentUser();
+    } catch (e) {
+      // Log the error but don't let it crash or stop the logout flow
+      print("Failed to clear FCM token: $e");
+    }
+
+    try {
+      // 2. Attempt Google Auth revocation
+      await _googleAuthService.signOut();
+    } catch (e) {
+      print("Failed to sign out of Google Auth: $e");
+    }
+
+    try {
+      // 3. GUARANTEE Firebase Auth clears local session
+      await _auth.signOut();
+
+    } catch (e) {
+      print("Critical error signing out of Firebase: $e");
+    }
   }
+
 
   String _messageForCode(String code) {
     switch (code) {
