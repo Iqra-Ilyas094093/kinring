@@ -209,6 +209,20 @@ class GroupsViewModel extends ChangeNotifier {
     batch.update(groupRef, {
       'memberIds': FieldValue.arrayRemove([memberUid]),
     });
+
+    // Strip stale uid from open events too — else Home's collectionGroup
+    // query permission-denies for this user forever (stale memberIds +
+    // isMember() rule fail = whole query rejected, not just this doc).
+    final staleEvents = await groupRef
+        .collection('events')
+        .where('memberIds', arrayContains: memberUid)
+        .get();
+    for (final doc in staleEvents.docs) {
+      batch.update(doc.reference, {
+        'memberIds': FieldValue.arrayRemove([memberUid]),
+      });
+    }
+
     await batch.commit();
   }
 
