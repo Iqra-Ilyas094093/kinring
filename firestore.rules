@@ -17,6 +17,23 @@ service cloud.firestore {
         get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // Handles a known Firestore gotcha: in GroupsViewModel.joinGroup, the
+    // member-doc create and this memberIds update happen in ONE batch.
+    // Security rules evaluate every write in a batch against the
+    // database state from BEFORE the batch started — so by the time
+    // this rule runs, it can't yet "see" the member doc the same batch
+    // is also creating, and isMember(groupId) reads false even though
+    // the join is legitimate. This lets a self-join through on its own
+    // narrow terms — exactly one uid added, and it must be the caller's
+    // own — without opening the door to arbitrary membership edits.
+    function isSelfJoin(groupId) {
+      return signedIn() &&
+        request.resource.data.memberIds.size() == resource.data.memberIds.size() + 1 &&
+        request.resource.data.memberIds.hasAll(resource.data.memberIds) &&
+        request.auth.uid in request.resource.data.memberIds &&
+        !(request.auth.uid in resource.data.memberIds);
+    }
+
     match /users/{uid} {
       allow read: if signedIn();
       allow write: if signedIn() && request.auth.uid == uid;
@@ -25,7 +42,7 @@ service cloud.firestore {
     match /groups/{groupId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if isMember(groupId);
+      allow update: if isMember(groupId) || isSelfJoin(groupId);
       allow delete: if isAdmin(groupId);
 
       match /members/{uid} {
@@ -37,6 +54,18 @@ service cloud.firestore {
       }
 
       match /events/{eventId} {
+        // Back to isMember(groupId). A resource.data-based check (e.g.
+        // `uid in resource.data.memberIds`) only works for list queries
+        // that ALSO filter on that same field in the query itself.
+        // listenGroupEvents / the per-group version of listenUpcomingEvents
+        // filter only on timeUTC, not memberIds — under a resource.data
+        // rule Firestore can't prove those queries safe and denies them
+        // outright, every time. isMember(groupId) doesn't touch
+        // resource.data at all (just checks membership via the group
+        // path), so it works for every read shape under events/,
+        // collectionGroup or not. EventsViewModel.listenUpcomingEvents no
+        // longer uses collectionGroup — it fans out per-group — so this
+        // is safe for both Home and Group Details.
         allow read: if isMember(groupId);
         allow create: if isMember(groupId) && request.resource.data.createdBy == request.auth.uid;
         allow update: if isMember(groupId);

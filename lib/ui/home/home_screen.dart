@@ -95,7 +95,7 @@ class HomeScreen extends StatelessWidget {
                     icon: Icons.alarm_outlined,
                     title: 'No events yet',
                     subtitle: 'Create your first alarm to get your group moving together.',
-                    actionLabel: 'Create your first alarm',
+                    actionLabel: 'Create first alarm',
                     onAction: () => Navigator.of(context).push(
                       MaterialPageRoute(builder: (_) => const CreateEventScreen()),
                     ),

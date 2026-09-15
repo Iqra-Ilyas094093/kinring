@@ -37,6 +37,22 @@ class EventStatusViewModel extends ChangeNotifier {
       'status': 'cleared',
       'clearedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    // Upcoming's live query bounds `timeUTC >= now` using the moment it
+    // subscribed — it won't re-check that against the real clock on its
+    // own, only on a fresh subscribe. Nudging timeUTC itself IS a doc
+    // mutation, which the already-open listener re-evaluates immediately
+    // — that's what makes clearing remove it from Upcoming right away
+    // instead of waiting for the next resubscribe/restart. Only for
+    // `once` events: repeating events' timeUTC is their real next-fire
+    // time and must not be touched here.
+    final eventRef = _db.collection('groups').doc(groupId).collection('events').doc(eventId);
+    final eventDoc = await eventRef.get();
+    if (eventDoc.data()?['repeatRule'] == 'once') {
+      await eventRef.update({
+        'timeUTC': Timestamp.fromDate(DateTime.now().subtract(const Duration(days: 1))),
+      });
+    }
   }
 
   /// Called when the ringing person snoozes instead of clearing —
@@ -97,7 +113,7 @@ class EventStatusViewModel extends ChangeNotifier {
   Stream<List<EventStatusModel>> listenStatuses({required String groupId, required String eventId}) {
     return _statuses(groupId, eventId).snapshots().map(
           (qs) => qs.docs.map(EventStatusModel.fromDoc).toList(),
-        );
+    );
   }
 
   /// One-time fetch for Event History (Phase 10) — a past event's

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -38,16 +40,62 @@ class EventsViewModel extends ChangeNotifier {
   /// denormalized onto each event doc (see `GroupEventModel`), so this
   /// is one `collectionGroup` query instead of one listener per group.
   Stream<List<GroupEventModel>> listenUpcomingEvents() {
-    final now = Timestamp.now();
-    return _db
-        .collectionGroup('events')
+    final controller = StreamController<List<GroupEventModel>>.broadcast();
+    final perGroup = <String, List<GroupEventModel>>{};
+    final eventSubs = <String, StreamSubscription>{};
+    StreamSubscription? groupsSub;
+
+    void emit() {
+      final all = perGroup.values.expand((e) => e).toList()
+        ..sort((a, b) => a.timeUTC.compareTo(b.timeUTC));
+      controller.add(all);
+    }
+
+    groupsSub = _db
+        .collection('groups')
         .where('memberIds', arrayContains: _uid)
-        .where('timeUTC', isGreaterThanOrEqualTo: now)
-        .orderBy('timeUTC')
         .snapshots()
-        .map((qs) => qs.docs
-            .map((d) => GroupEventModel.fromDoc(d, d.reference.parent.parent!.id))
-            .toList());
+        .listen((groupsSnap) {
+      final currentIds = groupsSnap.docs.map((d) => d.id).toSet();
+
+      eventSubs.keys.toList()
+          .where((id) => !currentIds.contains(id))
+          .forEach((id) {
+        eventSubs.remove(id)?.cancel();
+        perGroup.remove(id);
+      });
+
+      for (final groupId in currentIds) {
+        if (eventSubs.containsKey(groupId)) continue;
+        eventSubs[groupId] = _db
+            .collection('groups')
+            .doc(groupId)
+            .collection('events')
+            .where('timeUTC', isGreaterThanOrEqualTo: Timestamp.now())
+            .orderBy('timeUTC')
+            .limit(10)
+            .snapshots()
+            .listen((eventsSnap) {
+          perGroup[groupId] = eventsSnap.docs
+              .map((d) => GroupEventModel.fromDoc(d, groupId))
+              .toList();
+          emit();
+        }, onError: (_) {
+          perGroup[groupId] = [];
+          emit();
+        });
+      }
+      emit();
+    });
+
+    controller.onCancel = () {
+      groupsSub?.cancel();
+      for (final s in eventSubs.values) {
+        s.cancel();
+      }
+    };
+
+    return controller.stream;
   }
 
   Stream<List<GroupEventModel>> listenGroupEvents(String groupId) {
